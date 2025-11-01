@@ -1,4 +1,4 @@
-# Game in C
+# Rift Game
 
 A 2D structured game built in C, designed as both a standalone project and a foundation for a reusable game development codebase.
 
