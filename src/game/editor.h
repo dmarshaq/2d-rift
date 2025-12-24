@@ -1,7 +1,9 @@
 #ifndef EDITOR_H
 #define EDITOR_H
 
-#include "game/game.h"
+// #include "game/game.h"
+
+typedef struct state State;
 
 #include "core/mathf.h"
 

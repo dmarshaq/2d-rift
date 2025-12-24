@@ -2,8 +2,8 @@
 
 #include "meta_generated.h"
 
-#include "game/draw.h"
 #include "game/game.h"
+#include "game/draw.h"
 #include "game/graphics.h"
 #include "game/console.h"
 
@@ -192,8 +192,12 @@ static Mouse_Input *mouse_input_ptr;
 static Time_Info   *time_ptr;
 static Shader      **shader_table_ptr;
 
+static My_Console_Globals globals_v2;
+
 
 void editor_init(State *state) {
+    globals_v2 = state->console_globals;
+
     // Tweak vars default values.
     editor_params.selection_radius              = 0.1f;
     editor_params.camera_speed                  = 1.0f;
@@ -310,6 +314,7 @@ void editor_update_camera() {
 
 }
 
+
 void editor_update_mouse() {
     world_mouse_position_change = world_mouse_position;
     world_mouse_position = screen_to_camera(mouse_input_ptr->position, &editor_camera, window_ptr->width, window_ptr->height);
@@ -320,6 +325,10 @@ void editor_update_mouse() {
         world_mouse_click_origin = world_mouse_position;
 
         // Basically if left shift is not holding user doesn't want to save what was previously selected.
+        // 
+        // Previous me was wrong, this is not the behaviour I want editor to have, better solution will be to provide different "modes" user can operate in on selected things.
+        // For example: Translation mode, Rotation mode, Scaling mode, etc.
+        // And when mouse is in range of selected things, ability to perfom certain operation will be active.
         if (!hold(SDLK_LSHIFT)) {
             // Clear selected flags.
             for (u32 i = 0; i < array_list_length(&editor_selected); i++) {
@@ -410,6 +419,7 @@ editor_left_mouse_select_end:
             };
 
             // @Speed: Unoptimized, currenly searches through all elements.
+            // Linearlly.
             for (u32 i = 0; i < array_list_length(&quads_list); i++) {
                 for (u32 j = 0; j < VERTICIES_PER_QUAD; j++) {
                     if (aabb_touches_point(&selection_region, quads_list[i].quad.verts[j])) {

@@ -16,7 +16,7 @@ typedef struct asset_change {
  * Forcefully generate asset changes for every file in the directory specified.
  * Can be used to track all existing assets during app initialization stage.
  * Or can be used to hot reload assets in the specific folders.
- * Return 0 is successful
+ * Return 0 if successful
  */
 int asset_force_changes(char *directory);
 

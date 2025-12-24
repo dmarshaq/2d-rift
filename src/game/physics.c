@@ -3,12 +3,27 @@
 #include "core/mathf.h"
 #include "core/core.h"
 
+#include "game/game.h"
+
+
+
+// Pointers to global state.
+static Time_Info   *time_ptr;
+
+void phys_init(State *state) {
+    // Setting pointers to global state.
+    time_ptr           = &state->t;
+}
+
+
+
 
 /**
  * Physics.
  */
 
 static const Vec2f GRAVITY_ACCELERATION = (Vec2f){ 0.0f, -9.81f };
+// static const Vec2f GRAVITY_ACCELERATION = (Vec2f){ 0.0f, 0.0f };
 static const u8 MAX_IMPULSES = 16;
 static const u8 MAX_PHYS_BOXES = 16;
 static const u8 PHYS_ITERATIONS = 16;
@@ -50,44 +65,39 @@ void phys_apply_angular_acceleration(Body_2D *body, float acceleration) {
     body->angular_velocity += acceleration;
 }
 
-// DEPRICATED?
-//
-// void phys_init() {
-//     // Setting physics variables.
-//     state->impulses = array_list_make(Impulse, MAX_IMPULSES, &std_allocator); // @Leak.
-//     state->phys_boxes = array_list_make(Phys_Box *, MAX_PHYS_BOXES, &std_allocator); // @Leak.
-// 
-// }
-// 
-// void phys_add_impulse(Vec2f force, u32 milliseconds, Body_2D *body) {
-//     Impulse impulse = (Impulse) { 
-//         .delta_force = vec2f_divide_constant(force, (float)milliseconds), 
-//         .milliseconds = milliseconds, 
-//         .target = body 
-//     };
-//     array_list_append(&state->impulses, impulse);
-// }
-// 
-// void phys_apply_impulses() {
-//     for (u32 i = 0; i < array_list_length(&state->impulses); i++) {
-//         u32 force_time_multi = state->t.delta_time_milliseconds;
-// 
-//         if (state->impulses[i].milliseconds < state->t.delta_time_milliseconds) {
-//             force_time_multi = state->impulses[i].milliseconds;
-//             state->impulses[i].milliseconds = 0;
-//         }
-//         else {
-//             state->impulses[i].milliseconds -= state->t.delta_time_milliseconds;
-//         }
-// 
-//         state->impulses[i].target->velocity = vec2f_sum(state->impulses[i].target->velocity, vec2f_multi_constant(vec2f_divide_constant(state->impulses[i].delta_force, state->impulses[i].target->mass), (float)force_time_multi));
-// 
-//         if (state->impulses[i].milliseconds == 0) {
-//             array_list_unordered_remove(&state->impulses, i);
-//             i--;
-//         }
-//     }
-// }
+
+
+void phys_add_impulse(Vec2f force, u32 milliseconds, Body_2D *body) {
+    TODO("Refactor impulses.");
+    // Impulse impulse = (Impulse) { 
+    //     .delta_force = vec2f_divide_constant(force, (float)milliseconds), 
+    //         .milliseconds = milliseconds, 
+    //         .target = body 
+    // };
+    // array_list_append(&state->impulses, impulse);
+}
+
+void phys_apply_impulses() {
+    TODO("Refactor impulses.");
+    // for (u32 i = 0; i < array_list_length(&state->impulses); i++) {
+    //     u32 force_time_multi = state->t.delta_time_milliseconds;
+
+    //     if (state->impulses[i].milliseconds < state->t.delta_time_milliseconds) {
+    //         force_time_multi = state->impulses[i].milliseconds;
+    //         state->impulses[i].milliseconds = 0;
+    //     }
+    //     else {
+    //         state->impulses[i].milliseconds -= state->t.delta_time_milliseconds;
+    //     }
+
+    //     state->impulses[i].target->velocity = vec2f_sum(state->impulses[i].target->velocity, vec2f_multi_constant(vec2f_divide_constant(state->impulses[i].delta_force, state->impulses[i].target->mass), (float)force_time_multi));
+
+    //     if (state->impulses[i].milliseconds == 0) {
+    //         array_list_unordered_remove(&state->impulses, i);
+    //         i--;
+    //     }
+    // }
+}
 
 /**
  * Internal function.
@@ -545,8 +555,8 @@ u32 phys_find_contanct_points_obb(OBB* obb1, OBB* obb2, Vec2f *points) {
     return count;
 }
 
-// FINISH REFACTORING
-void phys_update(Phys_Box **phys_boxes, s64 length, Time_Info *t) {
+
+void phys_update(Phys_Box *phys_boxes, s64 count, s64 stride) {
     float depth;
     Vec2f normal;
     Phys_Box *box1;
@@ -554,24 +564,25 @@ void phys_update(Phys_Box **phys_boxes, s64 length, Time_Info *t) {
 
     for (u32 it = 0; it < PHYS_ITERATIONS; it++) {
 
-        for (u32 i = 0; i < length; i++) {
-            box1 = phys_boxes[i];
+        for (u32 i = 0; i < count; i++) {
+            // box1 = phys_boxes[i];
+            box1 = (Phys_Box *)((char *)(phys_boxes) + i * stride);
 
 
             if (!box1->dynamic) {
                 continue;
             }
-
+            
             box1->grounded = false;
 
             // Applying gravity.
             if (box1->gravitable) {
-                box1->body.velocity = vec2f_sum(box1->body.velocity, vec2f_multi_constant(GRAVITY_ACCELERATION, t->delta_time * PHYS_ITERATION_STEP_TIME ));
+                box1->body.velocity = vec2f_sum(box1->body.velocity, vec2f_multi_constant(GRAVITY_ACCELERATION, time_ptr->delta_time * PHYS_ITERATION_STEP_TIME ));
             }
 
             // Applying velocities.
-            box1->bound_box.center = vec2f_sum(box1->bound_box.center, vec2f_multi_constant(box1->body.velocity, t->delta_time * PHYS_ITERATION_STEP_TIME));
-            box1->bound_box.rot += box1->body.angular_velocity * t->delta_time * PHYS_ITERATION_STEP_TIME;
+            box1->bound_box.center = vec2f_sum(box1->bound_box.center, vec2f_multi_constant(box1->body.velocity, time_ptr->delta_time * PHYS_ITERATION_STEP_TIME));
+            box1->bound_box.rot += box1->body.angular_velocity * time_ptr->delta_time * PHYS_ITERATION_STEP_TIME;
             box1->body.mass_center = box1->bound_box.center;
 
             // @Incomplete: Add proper debugging support (physics visualization).
@@ -586,10 +597,10 @@ void phys_update(Phys_Box **phys_boxes, s64 length, Time_Info *t) {
         Vec2f contacts[2];
         u32 contacts_count;
         // Collision.
-        for (u32 i = 0; i < length; i++) {
-            box1 = phys_boxes[i];
-            for (u32 j = i + 1; j < length; j++) {
-                box2 = phys_boxes[j];
+        for (u32 i = 0; i < count; i++) {
+            box1 = (Phys_Box *)((char *)(phys_boxes) + i * stride);
+            for (u32 j = i + 1; j < count; j++) {
+                box2 = (Phys_Box *)((char *)(phys_boxes) + j * stride);
                 if (phys_sat_check_collision_obb(&box1->bound_box, &box2->bound_box)) { // @Speed: Need separate broad phase.
                     
                     // Fidning depth and normal of collision.
@@ -621,7 +632,7 @@ void phys_update(Phys_Box **phys_boxes, s64 length, Time_Info *t) {
                     box1->body.mass_center = box1->bound_box.center;
                     box2->body.mass_center = box2->bound_box.center;
 
-
+                    // Detailed physics collision response resolution happens here.
                     contacts_count = phys_find_contanct_points_obb(&box1->bound_box, &box2->bound_box, contacts);
                     phys_resolve_phys_box_collision_with_rotation_friction(box1, box2, normal, contacts, contacts_count);
                 }

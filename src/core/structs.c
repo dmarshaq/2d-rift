@@ -7,8 +7,8 @@
 
 
 
-
-#define STRUCTS_DIAGNOSTIC
+// @Important: Uncomment to use diagnostics features for data structures.
+// #define STRUCTS_DIAGNOSTIC
 
 #include <time.h>
 /**
@@ -82,7 +82,7 @@ s64 diagnostic_find_id(void *allocation) {
 
 #else
 
-void diagnostic_attach() {
+void diagnostic_attach(char *attach_name, FILE *stream) {
     LOG_ERROR("Structs Diagnostics are not defined. Cannot attach diagnostic.");
 }
 

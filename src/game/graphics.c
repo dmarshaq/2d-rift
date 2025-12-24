@@ -124,10 +124,6 @@ void graphics_init() {
     stbi_set_flip_vertically_on_load(true);
 
     // Setting drawing variables.
-    // Test diagnostic.
-    FILE *table = fopen("structs_trace.csv", "ab");
-    diagnostic_attach("verticies", table);
-
     verticies = vertex_buffer_make(); // @Leak
                                       //
     quad_indicies = array_list_make(u32, MAX_QUADS_PER_BATCH * 6, &std_allocator); // @Leak

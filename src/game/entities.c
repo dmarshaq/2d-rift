@@ -29,11 +29,13 @@ Entity *entities_spawn(Entity_Type type) {
     switch (type) {
         case NONE:
             break;
-        case PROP_STATIC:
-            TODO("PROP_STATIC default initialization.");
-            break;
         case PROP_PHYSICS:
             TODO("PROP_PHYSICS default initialization.");
+            break;
+        case PROP_STATIC:
+            break;
+        case PLAYER:
+            TODO("PLAYER default initialization.");
             break;
         default:
             printf_warning("Couldn't default initialize entity, unknown type.\n");

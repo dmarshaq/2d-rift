@@ -7,7 +7,6 @@
 #include "game/graphics.h"
 #include "game/input.h"
 #include "game/event.h"
-#include "game/physics.h"
 #include "game/imui.h"
 #include "game/vars.h"
 

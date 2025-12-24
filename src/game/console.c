@@ -20,7 +20,6 @@
 #include <stdio.h>
 
 
-static Quad_Drawer *drawer;
 
 static Font_Baked font_input;
 static Font_Baked font_output;
@@ -296,12 +295,14 @@ void console_error(char *format, ...) {
 
 
 
+// Pointers to global state.
+static Quad_Drawer *quad_drawer_ptr;
+static Events_Info *events_ptr;
+static Window_Info *window_ptr;
+static Time_Info   *time_ptr;
 
 void console_init(State *state) {
-
-
-
-    // ------ Tweak vars default values.
+    // Tweak vars default values.
     console.speed               = 100;
     console.open_percent        = 0.4f;
     console.full_open_percent   = 0.8f;
@@ -309,14 +310,18 @@ void console_init(State *state) {
     
     vars_tree_add(TYPE_OF(console), (u8 *)&console, CSTR("console"));
 
-
+    // Setting pointers to global state.
+    quad_drawer_ptr    = &state->quad_drawer;
+    window_ptr         = &state->window;
+    events_ptr         = &state->events;
+    time_ptr           = &state->t;
 
 
 
     // ------ Internal vars.
 
     // Get resources.
-    drawer = &state->quad_drawer;
+    quad_drawer_ptr = &state->quad_drawer;
 
     // Load needed font... Hard coded...
     u8* font_data = read_file_into_buffer("res/font/Consolas-Regular.ttf", NULL, &std_allocator);
@@ -372,32 +377,32 @@ void console_init(State *state) {
     user_input_history_buffer = array_list_make(char, HISTORY_BUFFER_SIZE, &std_allocator);
 }
 
-void console_update(Window_Info *window, Events_Info *events, Time_Info *t) {
+void console_update() {
     // Reset state.
     input_cursor_moved = false;
 
-    c_x0 = 0.1f * window->width;
-    c_x1 = 0.9f * window->width;
+    c_x0 = 0.1f * window_ptr->width;
+    c_x1 = 0.9f * window_ptr->width;
 
     // Checking for input to change console's state.
     if (pressed(SDLK_F11)) {
         if (hold(SDLK_LSHIFT)) {
             if (console_state == FULLY_OPEN) {
                 console_state = CLOSED;
-                console_stop_input(&events->text_input);
+                console_stop_input(&events_ptr->text_input);
             }
             else {
                 console_state = FULLY_OPEN;
-                console_start_input_if_not(&events->text_input);
+                console_start_input_if_not(&events_ptr->text_input);
             }
         } else {
             if (console_state == OPEN) {
                 console_state = CLOSED;
-                console_stop_input(&events->text_input);
+                console_stop_input(&events_ptr->text_input);
             }
             else {
                 console_state = OPEN;
-                console_start_input_if_not(&events->text_input);
+                console_start_input_if_not(&events_ptr->text_input);
             }
         }
     }
@@ -405,33 +410,33 @@ void console_update(Window_Info *window, Events_Info *events, Time_Info *t) {
     // Lerping console if it's y0 doesn't match it's state (target y0).
     switch(console_state) {
         case CLOSED:
-            c_y0_target = window->height;
+            c_y0_target = window_ptr->height;
             break;
         case OPEN:
-            c_y0_target = window->height * (1.0f - console.open_percent);
+            c_y0_target = window_ptr->height * (1.0f - console.open_percent);
             break;
         case FULLY_OPEN:
-            c_y0_target = window->height * (1.0f - console.full_open_percent);
+            c_y0_target = window_ptr->height * (1.0f - console.full_open_percent);
             break;
         default:
             printf_err("Unknown console state.\n");
             break;
     }
 
-    c_y0 = lerp(c_y0, c_y0_target, 0.01f * t->delta_time_milliseconds);
+    c_y0 = lerp(c_y0, c_y0_target, 0.01f * time_ptr->delta_time_milliseconds);
     
 
     // Checking for input if active.
     if (SDL_IsTextInputActive()) {
         
-        if (repeat(SDLK_UP, t->delta_time_milliseconds)) {
+        if (repeat(SDLK_UP, time_ptr->delta_time_milliseconds)) {
             if (hold(SDLK_LSHIFT))
                 display_line_offset++;
             else
                 history_peek_up_user_message();
         }
 
-        if (repeat(SDLK_DOWN, t->delta_time_milliseconds)) {
+        if (repeat(SDLK_DOWN, time_ptr->delta_time_milliseconds)) {
             if (hold(SDLK_LSHIFT))
                 display_line_offset--;
             else
@@ -441,7 +446,7 @@ void console_update(Window_Info *window, Events_Info *events, Time_Info *t) {
         if (display_line_offset < 0) 
             display_line_offset = 0;
 
-        if (repeat(SDLK_LEFT, t->delta_time_milliseconds)) {
+        if (repeat(SDLK_LEFT, time_ptr->delta_time_milliseconds)) {
             // Stop history command walk when cursor moving.
             history_return_peeked_message();
             
@@ -451,7 +456,7 @@ void console_update(Window_Info *window, Events_Info *events, Time_Info *t) {
             input_cursor_moved = true;
         }
 
-        if (repeat(SDLK_RIGHT, t->delta_time_milliseconds)) {
+        if (repeat(SDLK_RIGHT, time_ptr->delta_time_milliseconds)) {
             // Stop history command walk when cursor moving.
             history_return_peeked_message();
             
@@ -462,11 +467,11 @@ void console_update(Window_Info *window, Events_Info *events, Time_Info *t) {
         }
 
 
-        if (events->text_input.text_inputted) {
+        if (events_ptr->text_input.text_inputted) {
             // Stop history command walk when text editing.
             history_return_peeked_message();
 
-            s64 written = insert_input_text(input, INPUT_BUFFER_SIZE, input_length, input_cursor_index,&events->text_input);
+            s64 written = insert_input_text(input, INPUT_BUFFER_SIZE, input_length, input_cursor_index,&events_ptr->text_input);
 
             input_length += written;
             input_cursor_index += written;
@@ -476,7 +481,7 @@ void console_update(Window_Info *window, Events_Info *events, Time_Info *t) {
 
 
 
-        if (repeat(SDLK_BACKSPACE, t->delta_time_milliseconds)) {
+        if (repeat(SDLK_BACKSPACE, time_ptr->delta_time_milliseconds)) {
             // Stop history command walk when text editing.
             history_return_peeked_message();
 
@@ -516,19 +521,20 @@ void console_update(Window_Info *window, Events_Info *events, Time_Info *t) {
             // Moving display of the console to the very bottom.
             display_line_offset = 0;
         }
-
-        //  input_cursor_index = events->text_input.write_index;
+        
+        // @Obosolete?
+        //  input_cursor_index = events_ptr->text_input.write_index;
     }
 
     // Cursor styling.
-    ti_update(&input_cursor_blink_timer, t->delta_time_milliseconds);
+    ti_update(&input_cursor_blink_timer, time_ptr->delta_time_milliseconds);
     
     if (input_cursor_moved) {
         ti_reset(&input_cursor_blink_timer);
         input_cursor_visible = true;
         input_cursor_activity += 0.03f;
     } else {
-        input_cursor_activity -= 0.15f * t->delta_time;
+        input_cursor_activity -= 0.15f * time_ptr->delta_time;
     }
     input_cursor_activity = clamp(input_cursor_activity, 0.0f, 0.25f);
 
@@ -540,15 +546,15 @@ void console_update(Window_Info *window, Events_Info *events, Time_Info *t) {
 
 }
 
-void console_draw(Window_Info *window) {
-    projection = screen_calculate_projection(window->width, window->height);
-    shader_update_projection(drawer->program, &projection);
+void console_draw() {
+    projection = screen_calculate_projection(window_ptr->width, window_ptr->height);
+    shader_update_projection(quad_drawer_ptr->program, &projection);
     
 
-    draw_begin(drawer);
+    draw_begin(quad_drawer_ptr);
 
     // Output.
-    draw_rect(vec2f_make(c_x0, c_y0 + input_height), vec2f_make(c_x1, c_y0 + console_max_height(window)), .color = vec4f_make(0.10f, 0.12f, 0.24f, 0.98f));
+    draw_rect(vec2f_make(c_x0, c_y0 + input_height), vec2f_make(c_x1, c_y0 + console_max_height(window_ptr)), .color = vec4f_make(0.10f, 0.12f, 0.24f, 0.98f));
 
     // Input.
     draw_rect(vec2f_make(c_x0, c_y0), vec2f_make(c_x1, c_y0 + input_height), .color = vec4f_make(0.18f, 0.18f, 0.35f, 0.98f));

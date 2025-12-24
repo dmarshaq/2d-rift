@@ -9,6 +9,7 @@
 #include "core/log.h"
 
 #include "game/graphics.h"
+#include "game/entities.h"
 #include "game/input.h"
 #include "game/draw.h"
 #include "game/event.h"
@@ -41,6 +42,9 @@
  * It exists through out the game execution and it's data changes accordingly to the current game state.
  */
 static State *state;
+
+// @Temporary.
+static Entity *entities;
 
 
 
@@ -212,6 +216,23 @@ void game_init(State *global_state) {
     // Init immediate ui.
     ui_init(&state->ui_state, &state->events.mouse_input);
 
+
+    // Init entity management.
+    entities = entities_init();
+
+    // @Temporary: Hard coding level :)
+    Entity *spawned;
+
+    spawned = entities_spawn(PROP_STATIC);
+    spawned->phys_box.bound_box = obb_make(((Vec2f){0.0f, -0.5f}), 8.0f, 1.0f, 0.0f);
+    spawned->phys_box.body = phys_body_obb_make(&spawned->phys_box.bound_box, 10.0f, 0.0f, 1.0f, 0.8f);
+
+    phys_init(state);
+
+
+
+
+
     // Init editor.
     editor_init(state);
 
@@ -248,8 +269,8 @@ void game_init(State *global_state) {
 
 
 
-    // Setting game state: GAME_STATE_EDITOR for now.
-    state->game_state = GAME_STATE_EDITOR;
+    // Setting game state.
+    state->game_state = GAME_STATE_LEVEL;
 
 
     // Setting clear color.
@@ -353,6 +374,7 @@ void game_update() {
             if (!console_active()) {
                 if (editor_update()) {
                     TODO("Editor exitting.");
+                    // Might be moved to editor itself since it is generally not part of the game?
                     // Editor is exitted.
                     // Rebuild the level.
                     // Load level.
@@ -365,6 +387,27 @@ void game_update() {
 
             break;
         case GAME_STATE_LEVEL:
+            if (!console_active()) {
+                
+            }
+
+            Matrix4f projection;
+
+            projection = camera_calculate_projection(&state->main_camera, state->window.width, state->window.height);
+
+
+            shader_update_projection(state->quad_drawer.program, &projection);
+
+            draw_begin(&state->quad_drawer);
+
+            for (s64 i = 0; i < entities_count(); i++) {
+                draw_rect(obb_p0(&entities[i].phys_box.bound_box), obb_p1(&entities[i].phys_box.bound_box), .offset_angle = entities[i].phys_box.bound_box.rot);
+            }
+
+            draw_end();
+
+
+
             break;
     }
     
@@ -373,10 +416,10 @@ void game_update() {
 
 
     // Console update.
-    console_update(&state->window, &state->events, &state->t);
+    console_update();
 
     // Console drawing.
-    console_draw(&state->window);
+    console_draw();
    
 
 

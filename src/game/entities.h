@@ -4,6 +4,8 @@
 #include "core/type.h"
 #include "core/mathf.h"
 
+#include "game/physics.h"
+
 /**
  * Entities are using Array of Structure approach because of how various might accessing be and how different enetities operations per field might look like.
  * But other structures like physics or particles are better suited to use a Structure of Arrays approach due to their calculation and memory heavy nature.
@@ -19,16 +21,17 @@ static const s64 MAX_ENTITIES = 64;
  * Boilerplate for adding new entities.
  * Add new entities here.
  */
-typedef struct prop_static {
-    Vec2f position;
-} Prop_Static;
-
-
 typedef struct prop_physics {
-    Vec2f position;
+    Vec4f color;
 } Prop_Physics;
 
+typedef struct prop_static {
+    Vec4f color;
+} Prop_Static;
 
+typedef struct player {
+    Vec4f color;
+} Player;
 
 
 
@@ -36,6 +39,7 @@ typedef enum entity_type : u8 {
     NONE          = 0x0,
     PROP_PHYSICS,
     PROP_STATIC,
+    PLAYER,
 } Entity_Type;
 
 /**
@@ -46,9 +50,11 @@ typedef enum entity_type : u8 {
  */
 typedef struct entity {
     Entity_Type type;
+    Phys_Box phys_box;
     union {
         Prop_Physics    prop_physics;
         Prop_Static     prop_static;
+        Player          player;
     };
 } Entity;
 
