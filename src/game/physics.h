@@ -42,6 +42,7 @@ static Body_2D phys_body_obb_make(OBB *obb, float mass, float restitution, float
 
 
 
+
 typedef struct impulse {
     Vec2f delta_force;
     u32 milliseconds;
@@ -63,6 +64,17 @@ typedef struct phys_box {
 } Phys_Box;
 
 
+static Phys_Box phys_box_make(Vec2f position, float width, float height, float rotation, float mass, float restitution, float static_friction, float dynamic_friction, bool dynamic, bool rotatable, bool destructible, bool gravitable) {
+    Phys_Box phys_box;
+    phys_box.bound_box = obb_make(position, width, height, rotation);
+    phys_box.body = phys_body_obb_make(&phys_box.bound_box, mass, restitution, static_friction, dynamic_friction);
+    phys_box.dynamic        = dynamic;
+    phys_box.rotatable      = rotatable;
+    phys_box.destructible   = destructible;
+    phys_box.gravitable     = gravitable;
+
+    return phys_box;
+}
 
 /**
  * Applies instanteneous force to rigid body.

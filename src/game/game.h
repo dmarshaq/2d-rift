@@ -8,6 +8,7 @@
 #include "game/input.h"
 #include "game/event.h"
 #include "game/imui.h"
+#include "game/level.h"
 #include "game/vars.h"
 
 
@@ -29,6 +30,8 @@ typedef struct state {
 
     Vars_Tree vars_tree;
 
+    Level level;
+    // @TODO: Move this camera to level struct.
     Camera main_camera;
     
     Shader     *shader_table;

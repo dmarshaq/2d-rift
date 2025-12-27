@@ -9,7 +9,7 @@
 #include "core/log.h"
 
 #include "game/graphics.h"
-#include "game/entities.h"
+#include "game/level.h"
 #include "game/input.h"
 #include "game/draw.h"
 #include "game/event.h"
@@ -42,9 +42,6 @@
  * It exists through out the game execution and it's data changes accordingly to the current game state.
  */
 static State *state;
-
-// @Temporary.
-static Entity *entities;
 
 
 
@@ -216,22 +213,11 @@ void game_init(State *global_state) {
     // Init immediate ui.
     ui_init(&state->ui_state, &state->events.mouse_input);
 
-
-    // Init entity management.
-    entities = entities_init();
-
-    // @Temporary: Hard coding level :)
-    Entity *spawned;
-
-    spawned = entities_spawn(PROP_STATIC);
-    spawned->phys_box.bound_box = obb_make(((Vec2f){0.0f, -0.5f}), 8.0f, 1.0f, 0.0f);
-    spawned->phys_box.body = phys_body_obb_make(&spawned->phys_box.bound_box, 10.0f, 0.0f, 1.0f, 0.8f);
-
+    // Init physics.
     phys_init(state);
 
-
-
-
+    // Init level manager.
+    level_manager_init(state);
 
     // Init editor.
     editor_init(state);
@@ -278,7 +264,11 @@ void game_init(State *global_state) {
 
     // Logging hello world to the console.
     console_log("Hello world!\n");
+
+    String starting_level_name = CSTR("demo_01");
+    console_log("Loading: '%.*s' level.\n", UNPACK(starting_level_name));
     
+    level_load(starting_level_name);
 }
 
 
@@ -387,24 +377,25 @@ void game_update() {
 
             break;
         case GAME_STATE_LEVEL:
-            if (!console_active()) {
-                
-            }
 
-            Matrix4f projection;
+            
+            level_update();
 
-            projection = camera_calculate_projection(&state->main_camera, state->window.width, state->window.height);
+            level_draw();
 
+            // Matrix4f projection;
 
-            shader_update_projection(state->quad_drawer.program, &projection);
+            // projection = camera_calculate_projection(&state->main_camera, state->window.width, state->window.height);
 
-            draw_begin(&state->quad_drawer);
+            // shader_update_projection(state->quad_drawer.program, &projection);
 
-            for (s64 i = 0; i < entities_count(); i++) {
-                draw_rect(obb_p0(&entities[i].phys_box.bound_box), obb_p1(&entities[i].phys_box.bound_box), .offset_angle = entities[i].phys_box.bound_box.rot);
-            }
+            // draw_begin(&state->quad_drawer);
 
-            draw_end();
+            // for (s64 i = 0; i < entities_count(); i++) {
+            //     draw_rect(obb_p0(&entities[i].phys_box.bound_box), obb_p1(&entities[i].phys_box.bound_box), .offset_angle = entities[i].phys_box.bound_box.rot);
+            // }
+
+            // draw_end();
 
 
 

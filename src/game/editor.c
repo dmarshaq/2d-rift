@@ -167,7 +167,7 @@ static Camera editor_camera;
 
 
 
-#define ARENA_SIZE 1024
+#define EDITOR_ARENA_SIZE 1024
 
 static Arena arena;
 
@@ -255,7 +255,7 @@ void editor_init(State *state) {
 
 
     // Make arena and allocate space for the buffers.
-    arena = arena_make(ARENA_SIZE);
+    arena = arena_make(EDITOR_ARENA_SIZE);
 
     info_buffer.data   = arena_alloc(&arena, 256);
     info_buffer.length = 256;
