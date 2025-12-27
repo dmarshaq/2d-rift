@@ -192,12 +192,8 @@ static Mouse_Input *mouse_input_ptr;
 static Time_Info   *time_ptr;
 static Shader      **shader_table_ptr;
 
-static My_Console_Globals globals_v2;
-
 
 void editor_init(State *state) {
-    globals_v2 = state->console_globals;
-
     // Tweak vars default values.
     editor_params.selection_radius              = 0.1f;
     editor_params.camera_speed                  = 1.0f;
