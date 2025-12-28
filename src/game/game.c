@@ -201,7 +201,7 @@ void game_init(State *global_state) {
 
 
     // Main camera init.
-    state->main_camera = camera_make(VEC2F_ORIGIN, 48);
+    state->main_camera = camera_make(VEC2F_ORIGIN, 64);
 
 
     // Init commands.

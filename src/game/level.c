@@ -58,6 +58,9 @@ void level_manager_init(State *s) {
     entities_allocation = calloc(MAX_ENTITIES, sizeof(Entity));
 }
 
+#define GEOMETRY_STATIC_FRICTION 0.7f
+#define GEOMETRY_DYNAMIC_FRICTION 0.4f
+
 void level_load(String name) {
     state->level = (Level) {
         .name = name,
@@ -65,16 +68,79 @@ void level_load(String name) {
         .entities_count = 0,
     };
 
+    // Player
     player = state->level.entities + level_add_entity((Entity) { 
-            .phys_box = phys_box_make(VEC2F_ORIGIN, 0.4f, 0.7f, 0.0f, 65.0f, 0.0f, 0.7f, 0.4f, true, false, false, true),
+            .phys_box = phys_box_make(vec2f_make(-1.0f, 0.7f), 0.8f, 1.4f, 0.0f, 65.0f, 0.0f, 0.7f, 0.4f, true, false, false, true),
             .type = PLAYER, 
             .player = (Player) { .color = VEC4F_YELLOW, }, 
             });
     
+    // Level blockout
     level_add_entity((Entity) {
-            .phys_box = phys_box_make(vec2f_make(0.0f, -1.5f), 4.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.7f, 0.4f, false, false, false, false),
+            .phys_box = phys_box_make(vec2f_make(2.0f, -1.5f), 12.0f, 3.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
             .type = PROP_STATIC, 
-            .prop_static = (Prop_Static) { .color = VEC4F_CYAN, }, 
+            .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
+            });
+
+    level_add_entity((Entity) {
+            .phys_box = phys_box_make(vec2f_make(-8.0f, -3.0f), 8.0f, 12.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+            .type = PROP_STATIC, 
+            .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
+            });
+
+    level_add_entity((Entity) {
+            .phys_box = phys_box_make(vec2f_make(-9.5f, 7.0f), 5.0f, 8.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+            .type = PROP_STATIC, 
+            .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
+            });
+
+    level_add_entity((Entity) {
+            .phys_box = phys_box_make(vec2f_make(2.5f, -6.0f), 13.0f, 6.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+            .type = PROP_STATIC, 
+            .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
+            });
+
+    level_add_entity((Entity) {
+            .phys_box = phys_box_make(vec2f_make(13.5f, 0.5f), 3.0f, 1.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+            .type = PROP_STATIC, 
+            .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
+            });
+
+    level_add_entity((Entity) {
+            .phys_box = phys_box_make(vec2f_make(20.0f, -6.0f), 12.0f, 6.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+            .type = PROP_STATIC, 
+            .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
+            });
+
+    level_add_entity((Entity) {
+            .phys_box = phys_box_make(vec2f_make(21.5f, -2.0f), 9.0f, 2.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+            .type = PROP_STATIC, 
+            .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
+            });
+
+    level_add_entity((Entity) {
+            .phys_box = phys_box_make(vec2f_make(23.0f, 1.0f), 6.0f, 4.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+            .type = PROP_STATIC, 
+            .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
+            });
+
+    level_add_entity((Entity) {
+            .phys_box = phys_box_make(vec2f_make(19.5f, 2.5f), 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+            .type = PROP_STATIC, 
+            .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
+            });
+
+    // Physics objects
+    level_add_entity((Entity) {
+            .phys_box = phys_box_make(vec2f_make(5.5f, 0.5f), 1.0f, 1.0f, 0.0f, 55.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, true, true, false, true),
+            .type = PROP_PHYSICS, 
+            .prop_physics = (Prop_Physics) { .color = VEC4F_CYAN, }, 
+            });
+
+    level_add_entity((Entity) {
+            .phys_box = phys_box_make(vec2f_make(6.5f, 1.5f), 0.5f, 1.4f, PI / 4.0f, 40.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, true, true, false, true),
+            .type = PROP_PHYSICS, 
+            .prop_physics = (Prop_Physics) { .color = VEC4F_CYAN, }, 
             });
 }
 
@@ -92,20 +158,22 @@ void level_update() {
             x_vel -= 1.0f;
         }
 
-        x_vel *= 8.0f;
+        x_vel *= 5.0f;
 
         player->phys_box.body.velocity.x = x_vel;
 
         if (pressed(SDLK_SPACE) && player->phys_box.grounded) {
-            phys_apply_force(&player->phys_box.body, vec2f_make(0.0f, 400.0f));
+            phys_apply_force(&player->phys_box.body, vec2f_make(0.0f, 425.0f));
         }
     }
 
 
-
-
     // Simulating physics.
     phys_update(&state->level.entities->phys_box, state->level.entities_count, sizeof(Entity));
+
+
+    // Simple super smooth camera movement.
+    state->main_camera.center = vec2f_lerp(state->main_camera.center, player->phys_box.bound_box.center, 0.8f * state->t.delta_time);
 }
 
 void level_draw() {
@@ -128,7 +196,7 @@ void level_draw() {
                 draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = state->level.entities[i].prop_static.color);
                 break;
             case PROP_PHYSICS:
-                draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = state->level.entities[i].prop_physics.color);
+                draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = state->level.entities[i].prop_physics.color, .offset_angle = state->level.entities[i].phys_box.bound_box.rot);
                 break;
         }
     }
