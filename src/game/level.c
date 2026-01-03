@@ -142,6 +142,19 @@ void level_load(String name) {
             .type = PROP_PHYSICS, 
             .prop_physics = (Prop_Physics) { .color = VEC4F_CYAN, }, 
             });
+
+    // Triggers, in future make triggers send events, it is usefull for 1. in editor set up of logic, and in more organized game logic, that can be more controlled, especially if events can be delayed and so on...
+    level_add_entity((Entity) {
+            .phys_box = (Phys_Box) {0},
+            .type = TRIGGER, 
+            .trigger = (Trigger) { .name = CSTR("finish"), .bound_box = obb_make(vec2f_make(24.0f, 5.0f), 2.0f, 4.0f, 0.0f)}, 
+            });
+
+    level_add_entity((Entity) {
+            .phys_box = (Phys_Box) {0},
+            .type = TRIGGER, 
+            .trigger = (Trigger) { .name = CSTR("pit"), .bound_box = obb_make(vec2f_make(8.0f, -11.0f), 24.0f, 4.0f, 0.0f)}, 
+            });
 }
 
 
@@ -174,6 +187,27 @@ void level_update() {
 
     // Simple super smooth camera movement.
     state->main_camera.center = vec2f_lerp(state->main_camera.center, player->phys_box.bound_box.center, 0.8f * state->t.delta_time);
+
+
+    for (s64 i = 0; i < state->level.entities_count; i++) {
+        switch(state->level.entities[i].type) {
+            case TRIGGER:
+                if (phys_sat_check_collision_obb(&state->level.entities[i].trigger.bound_box, &player->phys_box.bound_box)) {
+                    console_log("Trigger triggered.\n");
+                    if (str_equals(state->level.entities[i].trigger.name, CSTR("finish"))) {
+                        console_log("Level finished!\n");
+                        player->phys_box.bound_box.center = vec2f_make(-1.0f, 0.7f);
+                        continue;
+                    }
+                    if (str_equals(state->level.entities[i].trigger.name, CSTR("pit"))) {
+                        console_log("Player fell and died :(\n");
+                        player->phys_box.bound_box.center = vec2f_make(-1.0f, 0.7f);
+                        continue;
+                    }
+                }
+                break;
+        }
+    }
 }
 
 void level_draw() {
@@ -197,6 +231,9 @@ void level_draw() {
                 break;
             case PROP_PHYSICS:
                 draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = state->level.entities[i].prop_physics.color, .offset_angle = state->level.entities[i].phys_box.bound_box.rot);
+                break;
+            case TRIGGER:
+                draw_rect(obb_p0(&state->level.entities[i].trigger.bound_box), obb_p1(&state->level.entities[i].trigger.bound_box), .color = vec4f_make(0.6f, 0.3f, 0.3f, 0.2f));
                 break;
         }
     }

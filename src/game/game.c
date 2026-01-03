@@ -256,7 +256,7 @@ void game_init(State *global_state) {
 
 
     // Setting game state.
-    state->game_state = GAME_STATE_LEVEL;
+    state->game_state = GAME_STATE_EDITOR;
 
 
     // Setting clear color.

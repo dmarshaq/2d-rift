@@ -94,5 +94,11 @@ void phys_apply_angular_acceleration(Body_2D *body, float acceleration);
  */
 void phys_update(Phys_Box *phys_boxes, s64 count, s64 stride);
 
+/**
+ * Returns true of "obb1" and "obb2" touch.
+ * Usefull for triggers.
+ */
+bool phys_sat_check_collision_obb(OBB *obb1, OBB *obb2);
+
 
 #endif

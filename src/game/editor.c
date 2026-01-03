@@ -17,6 +17,7 @@
 
 
 
+// @Deprecated.
 typedef enum editor_quad_flags : u8 {
     EDITOR_QUAD_FLAG_P0_SELECTED = 0x01, // 00000001
     EDITOR_QUAD_FLAG_P2_SELECTED = 0x02, // 00000010
@@ -24,10 +25,11 @@ typedef enum editor_quad_flags : u8 {
     EDITOR_QUAD_FLAG_P1_SELECTED = 0x08, // 00001000
 } Editor_Quad_Flags;
 
+// @Deprecated.
 static const u8 EDITOR_QUAD_BITMASK_ANY_POINT_SELECTED = EDITOR_QUAD_FLAG_P0_SELECTED | EDITOR_QUAD_FLAG_P1_SELECTED | EDITOR_QUAD_FLAG_P2_SELECTED | EDITOR_QUAD_FLAG_P3_SELECTED;
 
 
-
+// @Deprecated.
 typedef struct editor_quad {
     Editor_Quad_Flags flags;
     Quad quad;
@@ -36,34 +38,15 @@ typedef struct editor_quad {
 
 
 
-void draw_editor_quad(Editor_Quad *quad) {
-
-    // float quad_data[44] = {
-    //     quad->quad.verts[0].x, quad->quad.verts[0].y, 0.0f, quad->color.x, quad->color.y, quad->color.z, quad->color.w * 0.8f, 0.0f, 0.0f, -1.0f, -1.0f,
-    //     quad->quad.verts[1].x, quad->quad.verts[1].y, 0.0f, quad->color.x, quad->color.y, quad->color.z, quad->color.w * 0.8f, 1.0f, 0.0f, -1.0f, -1.0f,
-    //     quad->quad.verts[2].x, quad->quad.verts[2].y, 0.0f, quad->color.x, quad->color.y, quad->color.z, quad->color.w * 0.8f, 0.0f, 1.0f, -1.0f, -1.0f,
-    //     quad->quad.verts[3].x, quad->quad.verts[3].y, 0.0f, quad->color.x, quad->color.y, quad->color.z, quad->color.w * 0.8f, 1.0f, 1.0f, -1.0f, -1.0f,
-    // };
-
-    // draw_quad_data(quad_data, 1);
-}
+typedef struct editor_edge {
+    Vec2f vertex;
+    u32 previous_index;
+    u32 next_index;
+    bool flipped_normal;
+} Editor_Edge;
 
 
-void draw_editor_quad_outline(Editor_Quad *quad) {
 
-    // float line_data[56] = {
-    //     quad->quad.verts[0].x, quad->quad.verts[0].y, 0.0f, 0.95f, 0.95f, 0.95f, 1.0f,
-    //     quad->quad.verts[1].x, quad->quad.verts[1].y, 0.0f, 0.95f, 0.95f, 0.95f, 1.0f,
-    //     quad->quad.verts[1].x, quad->quad.verts[1].y, 0.0f, 0.95f, 0.95f, 0.95f, 1.0f,
-    //     quad->quad.verts[3].x, quad->quad.verts[3].y, 0.0f, 0.95f, 0.95f, 0.95f, 1.0f,
-    //     quad->quad.verts[3].x, quad->quad.verts[3].y, 0.0f, 0.95f, 0.95f, 0.95f, 1.0f,
-    //     quad->quad.verts[2].x, quad->quad.verts[2].y, 0.0f, 0.95f, 0.95f, 0.95f, 1.0f,
-    //     quad->quad.verts[2].x, quad->quad.verts[2].y, 0.0f, 0.95f, 0.95f, 0.95f, 1.0f,
-    //     quad->quad.verts[0].x, quad->quad.verts[0].y, 0.0f, 0.95f, 0.95f, 0.95f, 1.0f,
-    // };
-
-    // draw_line_data(line_data, 4);
-}
 
 
 @Introspect;
@@ -87,7 +70,11 @@ static Editor_Params editor_params;
 
 
 
+// @Deprecated.
 static Editor_Quad *quads_list;
+
+static Editor_Edge *edges_list;
+static const u32 EDITOR_INVALID_INDEX = 0xffffffff;
 
 
 
@@ -133,7 +120,8 @@ Vec2f editor_mouse_snap_to_grid(Vec2f mouse_position) {
 
 typedef enum editor_selected_type : u8 {
     EDITOR_NONE,
-    EDITOR_QUAD,
+    EDITOR_QUAD, // @Deprecated.
+    EDITOR_EDGE,
 } Editor_Selected_Type;
 
 
@@ -142,12 +130,13 @@ typedef struct editor_selected {
     Editor_Selected_Type type;
 
     union {
-        Editor_Quad *quad;
+        Editor_Quad *quad; // @Deprecated.
+        u32 edge_index;
     };
 } Editor_Selected;
 
 
-static Editor_Selected *editor_selected;
+static Editor_Selected *editor_selected_list;
 
 static Vec2f editor_camera_current_vel;
 static float editor_camera_current_zoom;
@@ -235,7 +224,8 @@ void editor_init(State *state) {
 
 
     quads_list = array_list_make(Editor_Quad, 8, &std_allocator);
-    editor_selected = array_list_make(Editor_Selected, 8, &std_allocator);
+    edges_list = array_list_make(Editor_Edge, 8, &std_allocator);
+    editor_selected_list = array_list_make(Editor_Selected, 8, &std_allocator);
 
     
     // @Copypasta: From console.c ... 
@@ -327,14 +317,14 @@ void editor_update_mouse() {
         // And when mouse is in range of selected things, ability to perfom certain operation will be active.
         if (!hold(SDLK_LSHIFT)) {
             // Clear selected flags.
-            for (u32 i = 0; i < array_list_length(&editor_selected); i++) {
-                switch (editor_selected[i].type) {
+            for (u32 i = 0; i < array_list_length(&editor_selected_list); i++) {
+                switch (editor_selected_list[i].type) {
                     case EDITOR_QUAD:
-                        editor_selected[i].quad->flags &= ~(EDITOR_QUAD_BITMASK_ANY_POINT_SELECTED);
+                        editor_selected_list[i].quad->flags &= ~(EDITOR_QUAD_BITMASK_ANY_POINT_SELECTED);
                         break;
                 }
             }
-            array_list_clear(&editor_selected);
+            array_list_clear(&editor_selected_list);
         }
 
 
@@ -344,7 +334,7 @@ void editor_update_mouse() {
                 if (vec2f_distance(quads_list[i].quad.verts[j], world_mouse_position) < editor_params.selection_radius) {
                     // If a quad with vertex that user selected is not selected, it gets selected. Yeah goodluck reading this comment in the future.
                     if (!(quads_list[i].flags & EDITOR_QUAD_BITMASK_ANY_POINT_SELECTED)) {
-                        array_list_append(&editor_selected, ((Editor_Selected) {
+                        array_list_append(&editor_selected_list, ((Editor_Selected) {
                                     .type = EDITOR_QUAD,
                                     .quad = &quads_list[i],
                                     }));
@@ -370,7 +360,7 @@ void editor_update_mouse() {
                 // Quad is selected, add it only if it is not already selected.
                 if (!(quads_list[i].flags & EDITOR_QUAD_BITMASK_ANY_POINT_SELECTED)) {
                     quads_list[i].flags |= EDITOR_QUAD_BITMASK_ANY_POINT_SELECTED;
-                    array_list_append(&editor_selected, ((Editor_Selected) {
+                    array_list_append(&editor_selected_list, ((Editor_Selected) {
                                 .type = EDITOR_QUAD,
                                 .quad = &quads_list[i],
                                 }));
@@ -394,13 +384,13 @@ editor_left_mouse_select_end:
 
     if (mouse_input_ptr->left_unpressed) {
         // For all selected elements.
-        for (u32 i = 0; i < array_list_length(&editor_selected); i++) {
-            switch(editor_selected[i].type) {
+        for (u32 i = 0; i < array_list_length(&editor_selected_list); i++) {
+            switch(editor_selected_list[i].type) {
                 case EDITOR_QUAD:
                     for (u32 j = 0; j < VERTICIES_PER_QUAD; j++) {
-                        if (editor_selected[i].quad->flags & (1 << j)) {
-                            editor_selected[i].quad->quad.verts[j].x += selection_move_offset.x;
-                            editor_selected[i].quad->quad.verts[j].y += selection_move_offset.y;
+                        if (editor_selected_list[i].quad->flags & (1 << j)) {
+                            editor_selected_list[i].quad->quad.verts[j].x += selection_move_offset.x;
+                            editor_selected_list[i].quad->quad.verts[j].y += selection_move_offset.y;
                         }
                     }
                     break;
@@ -408,7 +398,7 @@ editor_left_mouse_select_end:
         }
 
         // If there were no elements selected, select all elements in the region.
-        if (array_list_length(&editor_selected) == 0) {
+        if (array_list_length(&editor_selected_list) == 0) {
             AABB selection_region = (AABB) {
                 .p0 = vec2f_make(fminf(world_mouse_snapped_position.x, world_mouse_snapped_click_origin.x), fminf(world_mouse_snapped_position.y, world_mouse_snapped_click_origin.y)),
                 .p1 = vec2f_make(fmaxf(world_mouse_snapped_position.x, world_mouse_snapped_click_origin.x), fmaxf(world_mouse_snapped_position.y, world_mouse_snapped_click_origin.y)),
@@ -427,7 +417,7 @@ editor_left_mouse_select_end:
                 }
 
                 if (quads_list[i].flags & EDITOR_QUAD_BITMASK_ANY_POINT_SELECTED) {
-                    array_list_append(&editor_selected, ((Editor_Selected) {
+                    array_list_append(&editor_selected_list, ((Editor_Selected) {
                                 .type = EDITOR_QUAD,
                                 .quad = &quads_list[i],
                                 }));
@@ -487,27 +477,28 @@ void editor_draw() {
 
 
 
-    // Drawing quads.
+    // Drawing quads.     
     shader_update_projection(quad_drawer_ptr->program, &projection);
 
     draw_begin(quad_drawer_ptr);
 
-    // Draw editor quads.
-    for (u32 i = 0; i < array_list_length(&quads_list); i++) {
-        draw_quad(quads_list[i].quad.verts[0], quads_list[i].quad.verts[1], quads_list[i].quad.verts[2], quads_list[i].quad.verts[3], .color = quads_list[i].color);
+    // @Deprecated.
+    // Draw editor quads.   
+    // for (u32 i = 0; i < array_list_length(&quads_list); i++) {
+    //     draw_quad(quads_list[i].quad.verts[0], quads_list[i].quad.verts[1], quads_list[i].quad.verts[2], quads_list[i].quad.verts[3], .color = quads_list[i].color);
 
-        for (u32 j = 0; j < VERTICIES_PER_QUAD; j++) {
-            if (quads_list[i].flags & (1 << j)) {
-                draw_dot(quads_list[i].quad.verts[j], VEC4F_RED, &editor_camera, NULL);
-            } else {
-                draw_dot(quads_list[i].quad.verts[j], VEC4F_CYAN, &editor_camera, NULL);
-            }
-        }
-    }
+    //     for (u32 j = 0; j < VERTICIES_PER_QUAD; j++) {
+    //         if (quads_list[i].flags & (1 << j)) {
+    //             draw_dot(quads_list[i].quad.verts[j], VEC4F_RED, &editor_camera, NULL);
+    //         } else {
+    //             draw_dot(quads_list[i].quad.verts[j], VEC4F_CYAN, &editor_camera, NULL);
+    //         }
+    //     }
+    // }
 
 
     // Drawing selection region if holding mouse, and nothing is selected.
-    if (mouse_input_ptr->left_hold && array_list_length(&editor_selected) == 0) {
+    if (mouse_input_ptr->left_hold && array_list_length(&editor_selected_list) == 0) {
         draw_rect(world_mouse_snapped_click_origin, world_mouse_snapped_position, .color = vec4f_make(0.4f, 0.4f, 0.85f, 0.4f));
     }
 
@@ -517,38 +508,64 @@ void editor_draw() {
 
 
 
-    // Drawing quad outlines.
+    // Drawing lines. 
     shader_update_projection(line_drawer_ptr->program, &projection);
 
     line_draw_begin(line_drawer_ptr);
 
-    // Draw editor quads outlines.
-    for (u32 i = 0; i < array_list_length(&quads_list); i++) {
-        if (quads_list[i].flags & EDITOR_QUAD_BITMASK_ANY_POINT_SELECTED) {
-            // Original selected.
-            draw_cross(quad_center(&quads_list[i].quad), VEC4F_YELLOW, &editor_camera, NULL);
-            draw_quad_outline(quads_list[i].quad.verts[0], quads_list[i].quad.verts[1], quads_list[i].quad.verts[2], quads_list[i].quad.verts[3], VEC4F_YELLOW, NULL);
 
+    // Draw editor edges.
+    float normal_length = 16.0f / (float)editor_camera.unit_scale; // Normal length is calculated so it is relative to the camera zoom.
 
-            // Preview of where selected quad.
-            Quad preview_quad;
-            for (u32 j = 0; j < VERTICIES_PER_QUAD; j++) {
-                if (quads_list[i].flags & (1 << j)) {
-                    preview_quad.verts[j] = vec2f_sum(quads_list[i].quad.verts[j], selection_move_offset);
-                } else {
-                    preview_quad.verts[j] = quads_list[i].quad.verts[j];
-                }
-            }
-            draw_cross(quad_center(&preview_quad), VEC4F_RED, &editor_camera, NULL);
-            draw_quad_outline(preview_quad.verts[0], preview_quad.verts[1], preview_quad.verts[2], preview_quad.verts[3], VEC4F_RED, NULL);
-
-        } else {
-            draw_quad_outline(quads_list[i].quad.verts[0], quads_list[i].quad.verts[1], quads_list[i].quad.verts[2], quads_list[i].quad.verts[3], VEC4F_WHITE, NULL);
-            draw_cross(quad_center(&quads_list[i].quad), VEC4F_WHITE, &editor_camera, NULL);
+    for (u32 i = 0; i < array_list_length(&edges_list); i++) {
+        if (edges_list[i].next_index == EDITOR_INVALID_INDEX) {
+            continue;
         }
+
+        Vec2f v0 = edges_list[i].vertex;
+        Vec2f v1 = edges_list[edges_list[i].next_index].vertex;
+        
+        draw_line(v0, v1, VEC4F_WHITE, NULL);
+
+        // -2 * edges_list[i].flipped_normal + 1 ----> true maps to -1, false maps to 1.
+        Vec2f normal = vec2f_normalize(vec2f_make( (-2 * edges_list[i].flipped_normal + 1) * (v1.y - v0.y), (2 * edges_list[i].flipped_normal - 1) * (v1.x - v0.x) ));
+
+        Vec2f midpoint = vec2f_make(v0.x + (v1.x - v0.x) / 2, v0.y + (v1.y - v0.y) / 2);
+        draw_line(midpoint, vec2f_sum(midpoint, vec2f_multi_constant(normal, normal_length)), VEC4F_BLUE, NULL);
+
+        
     }
 
+    // @Deprecated
+    // // Draw editor quads outlines.
+    // for (u32 i = 0; i < array_list_length(&quads_list); i++) {
+    //     if (quads_list[i].flags & EDITOR_QUAD_BITMASK_ANY_POINT_SELECTED) {
+    //         // Original selected.
+    //         draw_cross(quad_center(&quads_list[i].quad), VEC4F_YELLOW, &editor_camera, NULL);
+    //         draw_quad_outline(quads_list[i].quad.verts[0], quads_list[i].quad.verts[1], quads_list[i].quad.verts[2], quads_list[i].quad.verts[3], VEC4F_YELLOW, NULL);
+
+
+    //         // Preview of where selected quad.
+    //         Quad preview_quad;
+    //         for (u32 j = 0; j < VERTICIES_PER_QUAD; j++) {
+    //             if (quads_list[i].flags & (1 << j)) {
+    //                 preview_quad.verts[j] = vec2f_sum(quads_list[i].quad.verts[j], selection_move_offset);
+    //             } else {
+    //                 preview_quad.verts[j] = quads_list[i].quad.verts[j];
+    //             }
+    //         }
+    //         draw_cross(quad_center(&preview_quad), VEC4F_RED, &editor_camera, NULL);
+    //         draw_quad_outline(preview_quad.verts[0], preview_quad.verts[1], preview_quad.verts[2], preview_quad.verts[3], VEC4F_RED, NULL);
+
+    //     } else {
+    //         draw_quad_outline(quads_list[i].quad.verts[0], quads_list[i].quad.verts[1], quads_list[i].quad.verts[2], quads_list[i].quad.verts[3], VEC4F_WHITE, NULL);
+    //         draw_cross(quad_center(&quads_list[i].quad), VEC4F_WHITE, &editor_camera, NULL);
+    //     }
+    // }
+
     line_draw_end();
+
+
 
 
 
@@ -574,7 +591,7 @@ void editor_draw() {
                     "World mouse snapped click origin: (%2.2f, %2.2f)\n"
                     "Selected count: %u\n"
                     "Camera unit scale: %d\n"
-                    , window_ptr->width, window_ptr->height, array_list_length(&quads_list) * 4, world_mouse_position.x, world_mouse_position.y, world_mouse_snapped_position.x, world_mouse_snapped_position.y, world_mouse_snapped_click_origin.x, world_mouse_snapped_click_origin.y, array_list_length(&editor_selected), editor_camera.unit_scale)
+                    , window_ptr->width, window_ptr->height, array_list_length(&quads_list) * 4, world_mouse_position.x, world_mouse_position.y, world_mouse_snapped_position.x, world_mouse_snapped_position.y, world_mouse_snapped_click_origin.x, world_mouse_snapped_click_origin.y, array_list_length(&editor_selected_list), editor_camera.unit_scale)
             );
     );
 
@@ -594,9 +611,38 @@ void editor_get_verticies(Vec2f **verticies, s64 *verticies_count) {
 }
 
 void editor_add_quad() {
-    array_list_append(&quads_list, ((Editor_Quad) {
-                .flags = 0,
-                .quad = ((Quad) {{ { -1.0f, -1.0f }, { 1.0f, -1.0f, }, { -1.0f, 1.0f }, { 1.0f, 1.0f } }}),
-                .color = { randf() * 0.6f + 0.2f, randf() * 0.6f + 0.2f, randf() * 0.6f + 0.2f, 1.0f },
+    u32 index = array_list_length(&edges_list);
+
+    array_list_append(&edges_list, ((Editor_Edge) {
+                .vertex = ((Vec2f) { -1.0f, -1.0f }),
+                .previous_index = index + 3,
+                .next_index     = index + 1,
+                .flipped_normal = false,
                 }));
+    array_list_append(&edges_list, ((Editor_Edge) {
+                .vertex = ((Vec2f) { 1.0f, -1.0f }),
+                .previous_index = index,
+                .next_index     = index + 2,
+                .flipped_normal = false,
+                }));
+    array_list_append(&edges_list, ((Editor_Edge) {
+                .vertex = ((Vec2f) { 1.0f, 1.0f }),
+                .previous_index = index + 1,
+                .next_index     = index + 3,
+                .flipped_normal = false,
+                }));
+    array_list_append(&edges_list, ((Editor_Edge) {
+                .vertex = ((Vec2f) { -1.0f, 1.0f }),
+                .previous_index = index + 2,
+                .next_index     = index,
+                .flipped_normal = false,
+                }));
+
+
+    // @Deprecated.
+    // array_list_append(&quads_list, ((Editor_Quad) {
+    //             .flags = 0,
+    //             .quad = ((Quad) {{ { -1.0f, -1.0f }, { 1.0f, -1.0f, }, { -1.0f, 1.0f }, { 1.0f, 1.0f } }}),
+    //             .color = { randf() * 0.6f + 0.2f, randf() * 0.6f + 0.2f, randf() * 0.6f + 0.2f, 1.0f },
+    //             }));
 }

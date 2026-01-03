@@ -27,6 +27,11 @@ typedef struct player {
     Vec4f color;
 } Player;
 
+typedef struct trigger {
+    String name;
+    OBB bound_box;
+} Trigger;
+
 
 
 typedef enum entity_type : u8 {
@@ -34,6 +39,7 @@ typedef enum entity_type : u8 {
     PROP_PHYSICS,
     PROP_STATIC,
     PLAYER,
+    TRIGGER,
 } Entity_Type;
 
 /**
@@ -49,12 +55,15 @@ typedef struct entity {
         Prop_Physics    prop_physics;
         Prop_Static     prop_static;
         Player          player;
+        Trigger         trigger;
     };
 } Entity;
 
+
 typedef struct level {
     String name;
-    Entity *entities; // Maybe later allocate the entities array somehow else so level struct is more light weighted and memory for entities can be shared when loading / unloading levels.
+
+    Entity *entities;
     s64 entities_count;
 } Level;
 
