@@ -33,4 +33,6 @@ void editor_get_verticies(Vec2f **verticies, s64 *verticies_count);
 @RegisterCommand;
 void editor_add_quad();
 
+void editor_add_quad_at(Vec2f position);
+
 #endif
