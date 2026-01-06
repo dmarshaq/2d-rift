@@ -92,9 +92,11 @@ static Vec2f world_mouse_snapped_left_click_origin;
 static Vec2f world_mouse_snapped_right_click_origin;
 static u32   selection_move_anchor_vertex_index;
 static Vec2f selection_move_offset;
+static float grid_scale;
 
 
 Vec2f editor_mouse_snap_to_grid(Vec2f mouse_position) {
+    mouse_position = vec2f_multi_constant(mouse_position, grid_scale);
     int x = (int)(mouse_position.x);
     int y = (int)(mouse_position.y);
 
@@ -120,7 +122,7 @@ Vec2f editor_mouse_snap_to_grid(Vec2f mouse_position) {
         }
     }
 
-    return vec2f_make((int)(mouse_position.x), (int)(mouse_position.y));
+    return vec2f_make((int)(mouse_position.x) / grid_scale, (int)(mouse_position.y) / grid_scale);
 }
 
 
@@ -226,6 +228,7 @@ void editor_init(State *state) {
     editor_ui_mouse_menu_origin = VEC2F_ORIGIN;
     cut_selected_edge_index = EDITOR_INVALID_INDEX;
     cut_position = VEC2F_ORIGIN;
+    grid_scale = 1.0f;
 
     // Setting pointers to global state.
     quad_drawer_ptr    = &state->quad_drawer;
@@ -756,11 +759,13 @@ void editor_update_mouse() {
 
 bool editor_update() {
 
-    // if (pressed(SDLK_LEFTBRACKET)) {
-    // }
+    if (pressed(SDLK_LEFTBRACKET)) {
+        grid_scale *= 0.5f;
+    }
 
-    // if (pressed(SDLK_RIGHTBRACKET)) {
-    // }
+    if (pressed(SDLK_RIGHTBRACKET)) {
+        grid_scale *= 2.0f;
+    }
     
     editor_update_camera();
 
@@ -786,11 +791,11 @@ void editor_draw() {
     Vec2f editor_camera_p0 = vec2f_make(editor_camera.center.x - window_ptr->width * 0.5f / editor_camera.unit_scale, editor_camera.center.y - window_ptr->height * 0.5f / editor_camera.unit_scale);
     Vec2f editor_camera_p1 = vec2f_make(editor_camera.center.x + window_ptr->width * 0.5f / editor_camera.unit_scale, editor_camera.center.y + window_ptr->height * 0.5f / editor_camera.unit_scale);
 
-    float grid_quad[36] = {
-        -1.0f, -1.0f, editor_camera.unit_scale, 0.2f, 0.2f, 0.2f, 1.0f, editor_camera_p0.x, editor_camera_p0.y,
-         1.0f, -1.0f, editor_camera.unit_scale, 0.2f, 0.2f, 0.2f, 1.0f, editor_camera_p1.x, editor_camera_p0.y,
-        -1.0f,  1.0f, editor_camera.unit_scale, 0.2f, 0.2f, 0.2f, 1.0f, editor_camera_p0.x, editor_camera_p1.y,
-         1.0f,  1.0f, editor_camera.unit_scale, 0.2f, 0.2f, 0.2f, 1.0f, editor_camera_p1.x, editor_camera_p1.y,
+    float grid_quad[40] = {
+        -1.0f, -1.0f, editor_camera.unit_scale, 0.2f, 0.2f, 0.2f, 1.0f, editor_camera_p0.x, editor_camera_p0.y, grid_scale,
+         1.0f, -1.0f, editor_camera.unit_scale, 0.2f, 0.2f, 0.2f, 1.0f, editor_camera_p1.x, editor_camera_p0.y, grid_scale,
+        -1.0f,  1.0f, editor_camera.unit_scale, 0.2f, 0.2f, 0.2f, 1.0f, editor_camera_p0.x, editor_camera_p1.y, grid_scale,
+         1.0f,  1.0f, editor_camera.unit_scale, 0.2f, 0.2f, 0.2f, 1.0f, editor_camera_p1.x, editor_camera_p1.y, grid_scale,
     };
 
     draw_quad_data(grid_quad, 1);
@@ -948,7 +953,9 @@ void editor_draw() {
                     "World mouse snapped left click origin: (%2.2f, %2.2f)\n"
                     "Selected count: %u\n"
                     "Camera unit scale: %d\n"
-                    , window_ptr->width, window_ptr->height, (u8)editor_state, array_list_length(&edges_list), world_mouse_position.x, world_mouse_position.y, world_mouse_snapped_position.x, world_mouse_snapped_position.y, world_mouse_snapped_left_click_origin.x, world_mouse_snapped_left_click_origin.y, array_list_length(&editor_selected_list), editor_camera.unit_scale)
+                    "Grid scale: %2.2f\n"
+                    , window_ptr->width, window_ptr->height, (u8)editor_state, array_list_length(&edges_list), world_mouse_position.x, world_mouse_position.y, world_mouse_snapped_position.x, world_mouse_snapped_position.y, world_mouse_snapped_left_click_origin.x, world_mouse_snapped_left_click_origin.y, array_list_length(&editor_selected_list), editor_camera.unit_scale, grid_scale
+                    )
             );
     );
 

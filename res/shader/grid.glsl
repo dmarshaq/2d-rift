@@ -6,16 +6,19 @@ layout(location = 0) in vec2 position;
 layout(location = 1) in float unit_scale;
 layout(location = 2) in vec4 color;
 layout(location = 3) in vec2 uv0;
+layout(location = 4) in float grid_scale;
 
 layout(location = 0) uniform mat4 pr_matrix;
 layout(location = 4) uniform mat4 ml_matrix;
 
 out float v_unit_scale;
+out float v_grid_scale;
 out vec4 v_color;
 out vec2 v_uv0;
 
 void main() {
     v_unit_scale = unit_scale;
+    v_grid_scale = grid_scale;
     v_color = color;
     v_uv0 = uv0;
 
@@ -33,11 +36,12 @@ void main() {
 #ifdef FRAGMENT
 
 #define PI 3.14159265359
-#define AMP_SCALE 0.6
+#define AMP_SCALE 0.4
 
 layout(location = 0) out vec4 color;
 
 in float v_unit_scale;
+in float v_grid_scale;
 in vec4 v_color;
 in vec2 v_uv0;
 
@@ -54,8 +58,8 @@ float block(float x) {
 void main() {
     color.xyz = v_color.xyz * 
         (
-         (block(ground(1 - abs(sin(v_uv0.x * PI)) * v_unit_scale * AMP_SCALE) * v_unit_scale * AMP_SCALE - 1) + 1) + 
-         (block(ground(1 - abs(sin(v_uv0.y * PI)) * v_unit_scale * AMP_SCALE) * v_unit_scale * AMP_SCALE - 1) + 1)
+         (block(ground(1 - abs(sin(v_uv0.x * PI * v_grid_scale)) * v_unit_scale * AMP_SCALE / v_grid_scale) * v_unit_scale * AMP_SCALE - 1) + 1) + 
+         (block(ground(1 - abs(sin(v_uv0.y * PI * v_grid_scale)) * v_unit_scale * AMP_SCALE / v_grid_scale) * v_unit_scale * AMP_SCALE - 1) + 1)
         );
 
 
