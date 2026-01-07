@@ -78,6 +78,7 @@ static Editor_Params editor_params;
 // static Editor_Quad *quads_list;
 
 static Editor_Edge *edges_list;
+static u32 *edges_deleted_indicies_list;
 static const u32 EDITOR_INVALID_INDEX = 0xffffffff;
 
 
@@ -243,6 +244,7 @@ void editor_init(State *state) {
 
 
     edges_list = array_list_make(Editor_Edge, 8, &std_allocator);
+    edges_deleted_indicies_list = array_list_make(u32, 8, &std_allocator);
     editor_selected_list = array_list_make(Editor_Selected, 8, &std_allocator);
 
     
@@ -569,7 +571,7 @@ void editor_update_mouse() {
                                         .edge_index = i,
                                         }));
 
-                            if (aabb_touches_point(&selection_region, edges_list[edges_list[i].next_index].vertex) && !(edges_list[i].flags & EDITOR_EDGE_SELECTED)) {
+                            if (edges_list[i].next_index != EDITOR_INVALID_INDEX && aabb_touches_point(&selection_region, edges_list[edges_list[i].next_index].vertex) && !(edges_list[i].flags & EDITOR_EDGE_SELECTED)) {
                                 edges_list[i].flags |= EDITOR_EDGE_SELECTED;
                                 array_list_append(&editor_selected_list, ((Editor_Selected) {
                                             .type = EDITOR_EDGE,
@@ -616,7 +618,7 @@ void editor_update_mouse() {
             }
 
             if (pressed(SDLK_x)) {
-                u32 index = EDITOR_INVALID_INDEX;
+                // First remove EVERY reference to deleted verticies, by redistributing them among their neighbores.
                 for (u32 i = 0; i < array_list_length(&editor_selected_list); i++) {
                     switch(editor_selected_list[i].type) {
                         case EDITOR_EDGE:
@@ -625,12 +627,43 @@ void editor_update_mouse() {
                             i--;
                             break;
                         case EDITOR_VERTEX:
-                            if (index == EDITOR_INVALID_INDEX) {
-                                index = editor_selected_list[i].edge_index;
-                            }
-                            edges_list[editor_selected_list[i].edge_index].flags &= ~EDITOR_EDGE_VERTEX_SELECTED;
+                            u32 index = editor_selected_list[i].edge_index;
+
+                            edges_list[index].flags &= ~EDITOR_EDGE_VERTEX_SELECTED;
                             array_list_unordered_remove(&editor_selected_list, i);
                             i--;
+                            
+                            if (edges_list[index].previous_index != EDITOR_INVALID_INDEX) {
+                                if (edges_list[index].next_index == EDITOR_INVALID_INDEX || edges_list[edges_list[index].next_index].next_index != edges_list[index].previous_index) {
+                                    edges_list[edges_list[index].previous_index].next_index = edges_list[index].next_index;
+
+                                } else {
+                                    edges_list[edges_list[index].previous_index].next_index = EDITOR_INVALID_INDEX;                   
+                                }
+                            }
+                            if (edges_list[index].next_index != EDITOR_INVALID_INDEX) {
+                                if (edges_list[index].previous_index == EDITOR_INVALID_INDEX || edges_list[edges_list[index].previous_index].previous_index != edges_list[index].next_index) {
+                                    edges_list[edges_list[index].next_index].previous_index = edges_list[index].previous_index;                   
+                                } else {
+                                    edges_list[edges_list[index].next_index].previous_index = EDITOR_INVALID_INDEX;                   
+                                }
+                            }
+
+                            // Binary insertion to keep array sorted from in INCREASING order.
+                            u32 length = array_list_length(&edges_deleted_indicies_list);
+                            u32 start = 0;
+                            while (length > 0) {
+                                if (index < edges_deleted_indicies_list[start + (u32)(length / 2)]) {
+                                    // Go to the left.
+                                    length = (u32)(length / 2);
+                                } else {
+                                    // Go to the right.
+                                    start += (u32)(length / 2) + 1;
+                                    length = (length - 1) - (u32)(length / 2);
+                                }
+                            }
+                            array_list_add(&edges_deleted_indicies_list, start, index);
+
                             break;
                         default:
                             array_list_unordered_remove(&editor_selected_list, i);
@@ -638,25 +671,26 @@ void editor_update_mouse() {
                             break;
                     }
                 }
-                if (index != EDITOR_INVALID_INDEX) {
-                    // Assumes any legal lines are looped.
-                    int verticies_count = 1;
-                    for (u32 j = index; j != edges_list[index].previous_index; j = edges_list[j].next_index) {
-                        verticies_count++;
-                    }
+                
+                // Readdress edges that were removed.
+                u32 i;
+                for (u32 l = array_list_length(&edges_deleted_indicies_list); l > 0; l--) {
+                    i = edges_deleted_indicies_list[l - 1];
+                    if (i == array_list_length(&edges_list) - 1) {
+                        ((Array_List_Header *)((u8 *)edges_list - sizeof(Array_List_Header)))->length--;
+                    } else {
+                        array_list_unordered_remove(&edges_list, i);
 
-                    if (verticies_count > 3) {
-                        edges_list[edges_list[index].previous_index].next_index = edges_list[index].next_index;
-                        edges_list[edges_list[index].next_index].previous_index = edges_list[index].previous_index;
-                        array_list_unordered_remove(&edges_list, index);
-
-                        // After remove reroute the references of the moved edge.
-                        if (index < array_list_length(&edges_list)) {
-                            edges_list[edges_list[index].previous_index].next_index = index;
-                            edges_list[edges_list[index].next_index].previous_index = index;
+                        // Readdress, last edge that was moved to i index.
+                        if (edges_list[i].previous_index != EDITOR_INVALID_INDEX) {
+                            edges_list[edges_list[i].previous_index].next_index = i;
+                        }
+                        if (edges_list[i].next_index != EDITOR_INVALID_INDEX) {
+                            edges_list[edges_list[i].next_index].previous_index = i;
                         }
                     }
                 }
+                array_list_clear(&edges_deleted_indicies_list);
             }
 
             if (pressed(SDLK_c)) {
@@ -730,6 +764,7 @@ void editor_update_mouse() {
                             .flags = EDITOR_EDGE_SELECTED,
                             }));
 
+                edges_list[edges_list[cut_selected_edge_index].next_index].previous_index = array_list_length(&edges_list) - 1;
                 edges_list[cut_selected_edge_index].next_index = array_list_length(&edges_list) - 1;
                 array_list_append(&editor_selected_list, ((Editor_Selected) {
                             .type = EDITOR_EDGE,
@@ -760,11 +795,11 @@ void editor_update_mouse() {
 bool editor_update() {
 
     if (pressed(SDLK_LEFTBRACKET)) {
-        grid_scale *= 0.5f;
+        grid_scale *= 2.0f;
     }
 
     if (pressed(SDLK_RIGHTBRACKET)) {
-        grid_scale *= 2.0f;
+        grid_scale *= 0.5f;
     }
     
     editor_update_camera();

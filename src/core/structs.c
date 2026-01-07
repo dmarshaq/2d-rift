@@ -310,6 +310,8 @@ void _array_list_free(void **list) {
 #endif
 }
 
+
+
 void _array_list_resize_to_fit(void **list, u32 requiered_length) {
     Array_List_Header *header = *list - sizeof(Array_List_Header);
 
@@ -347,6 +349,29 @@ void _array_list_resize_to_fit(void **list, u32 requiered_length) {
 
 
 }
+
+
+void _array_list_shift_to_fit(void **list, u32 index, u32 extra_length) {
+    Array_List_Header *header = *list - sizeof(Array_List_Header);
+
+    _array_list_resize_to_fit(list, extra_length + header->length);
+
+    header = *list - sizeof(Array_List_Header);
+
+    (void)memmove(*list + (index + extra_length) * header->item_size, *list + index * header->item_size, (header->length - index) * header->item_size);
+
+    header->length += extra_length;
+}
+
+
+
+
+
+
+
+
+
+
 
 u32 _array_list_next_index(void **list) {
 #ifdef STRUCTS_DIAGNOSTIC
@@ -397,6 +422,7 @@ u32 _array_list_append_multiple(void **list, void *items, u32 count) {
 
     return header->length - count;
 }
+
 
 void _array_list_pop(void *list, u32 count) {
 

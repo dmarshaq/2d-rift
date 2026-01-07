@@ -17,6 +17,7 @@
 
 #define array_list_append(ptr_list, item)                           _array_list_resize_to_fit((void **)(ptr_list), array_list_length(ptr_list) + 1); (*ptr_list)[_array_list_next_index((void **)(ptr_list))] = item
 #define array_list_append_multiple(ptr_list, item_arr, count)       _array_list_append_multiple((void **)ptr_list, (void *)item_arr, count)
+#define array_list_add(ptr_list, index, item)                       _array_list_shift_to_fit((void **)(ptr_list), index, 1); (*ptr_list)[index] = item
 #define array_list_pop(ptr_list)                                    _array_list_pop((void *)*ptr_list, 1)
 #define array_list_pop_multiple(ptr_list, count)                    _array_list_pop((void *)*ptr_list, count)
 #define array_list_clear(ptr_list)                                  _array_list_clear((void *)*ptr_list)
@@ -34,6 +35,7 @@ u32   _array_list_length(void *list);
 u32   _array_list_capacity(void *list);
 u32   _array_list_item_size(void *list);
 void  _array_list_resize_to_fit(void **list, u32 requiered_length);
+void  _array_list_shift_to_fit(void **list, u32 index, u32 extra_length);
 u32   _array_list_next_index(void **list);
 u32   _array_list_append_multiple(void **list, void *items, u32 count);
 void  _array_list_pop(void *list, u32 count);
