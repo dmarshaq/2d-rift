@@ -1006,8 +1006,41 @@ void editor_draw() {
     draw_end();
 }
 
-void editor_get_verticies(Vec2f **verticies, s64 *verticies_count) {
-    TODO("Getting editor result.");
+
+// 0x6c766c00 stands for 'lvl' in ascii
+#define EDITOR_LEVEL_FORMAT_HEADER 0x6c766c00
+
+void editor_save(String name) {
+    // Saves current editor level by the name provided.
+    char file_name[name.length + 1];
+    str_copy_to(name, file_name);
+    file_name[name.length] = '\0';
+
+    FILE *file = fopen(file_name, "wb");
+    if (file == NULL) {
+        console_log("Couldn't open the level file for writing '%.*s'.\n", UNPACK(name));
+        return;
+    }
+
+    u64 written = 0; 
+    
+    written += fwrite_u32(EDITOR_LEVEL_FORMAT_HEADER, file);
+
+    // Serializing each edge information.
+    written += fwrite_u32(array_list_length(&edges_list), file);
+    
+    for (u32 i = 0; i < array_list_length(&edges_list); i++) {
+        written += fwrite_float(edges_list[i].vertex.x, file);
+        written += fwrite_float(edges_list[i].vertex.y, file);
+        written += fwrite_u32(edges_list[i].previous_index, file);
+        written += fwrite_u32(edges_list[i].next_index, file);
+        written += fwrite(&edges_list[i].flipped_normal, 1, 1, file);
+        written += fwrite(&edges_list[i].flags, 1, 1, file);
+    }
+
+    fclose(file);
+
+    console_log("Written %llu bytes to level file '%.*s'.\n", written, UNPACK(name));
 }
 
 void editor_add_quad() {

@@ -6,6 +6,7 @@
 typedef struct state State;
 
 #include "core/mathf.h"
+#include "core/str.h"
 
 /**
  * Should be called one time, inits editor.
@@ -24,14 +25,16 @@ bool editor_update();
 void editor_draw();
 
 /**
- * Outputs all verticies into supplied verticies array.
- * Outputs count of verticies into supplied verticies_count varaible.
+ * Saves current editor level by the name provided.
  */
-void editor_get_verticies(Vec2f **verticies, s64 *verticies_count);
+@Introspect;
+@RegisterCommand;
+void editor_save(String name);
 
 @Introspect;
 @RegisterCommand;
 void editor_add_quad();
+
 
 void editor_add_quad_at(Vec2f position);
 

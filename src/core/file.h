@@ -1,6 +1,9 @@
 #ifndef FILE_H
 #define FILE_H
 
+#include <stdio.h>
+#include <stdlib.h>
+
 #include "core/core.h"
 #include "core/type.h"
 #include "core/str.h"
@@ -38,6 +41,33 @@ int write_str_to_file(String str, char *file_name);
  * Will return any other value and won't write to file if failed.
  */
 int fwrite_str(String str, FILE *file);
+
+
+/**
+ * Writes 32 bit integer to the file, enforcing little endian.
+ */
+static inline int fwrite_u32(u32 value, FILE *file) {
+    value = to_le32(value);
+    return fwrite(&value, 4, 1, file);
+}
+
+/**
+ * Writes 64 bit integer to the file, enforcing little endian.
+ */
+static inline int fwrite_u64(u64 value, FILE *file) {
+    value = to_le64(value);
+    return fwrite(&value, 8, 1, file);
+}
+
+/**
+ * Writes 32 bit float to the file, enforcing little endian.
+ */
+static inline int fwrite_float(float value, FILE *file) {
+    u32 bits;
+    memcpy(&bits, &value, 4);
+    bits = to_le32(bits);
+    return fwrite(&bits, 4, 1, file);
+}
 
 
 

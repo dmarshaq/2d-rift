@@ -427,6 +427,11 @@ void type_table_init() {
     item = arena_alloc(&arena_type_info, sizeof(Type_Info));
     *item = ((Type_Info) { INTEGER, CSTR("u64"), 8, 8, .t_integer = { 64, false } });
     hash_table_put(&type_table, item, UNPACK_LITERAL("u64") );
+
+
+    item = arena_alloc(&arena_type_info, sizeof(Type_Info));
+    *item = ((Type_Info) { STRING, CSTR("String"), 16, 8 });
+    hash_table_put(&type_table, item, UNPACK_LITERAL("String") );
 }
 
 
@@ -1332,6 +1337,9 @@ int meta_process(int count, char **files, char *output_path) {
                     fwrite_str(STR_BUFFER("ARRAY, .t_array = { "), meta_generated_h);
                     // ...
                     fwrite_str(STR_BUFFER(" }"), meta_generated_h);
+                    break;
+                case STRING:
+                    fprintf(meta_generated_h, "STRING, STR_BUFFER(\"%.*s\"), %u, %u", UNPACK(item->name), item->size, item->align);
                     break;
                 case ENUM:
                     u64 enum_member_index = item->t_enum.members - (Type_Info_Enum_Member *)arena_type_info_enum_member.allocation; 

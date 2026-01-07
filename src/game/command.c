@@ -85,9 +85,21 @@ void command_run(String command) {
                 }
 
                 // Getting arg str and moving remainder to the index after.
-                arg = str_get_until_space(remainder);
-                remainder.data += arg.length;
-                remainder.length -= arg.length;
+                if (remainder.data[0] == '"') {
+                    remainder = str_eat_chars(remainder, 1);
+
+                    s64 end = str_find_char_left(remainder, '"');
+                    if (end < 0) {
+                        console_log("%.*s: Argument [%d]: Expected closing \".\n", UNPACK(command_name), args_count - 1);
+                        return;
+                    }
+
+                    arg = str_substring(remainder, 0, end);
+                    remainder = str_eat_chars(remainder, arg.length + 1);
+                } else {
+                    arg = str_get_until_space(remainder);
+                    remainder = str_eat_chars(remainder, arg.length);
+                }
 
                 // Parsing arg string.
                 Type_Info *expected_argument_type = get_base_of_typedef(command_list[i].type->t_function.arguments[args_count - 1].type);
@@ -134,7 +146,10 @@ void command_run(String command) {
 
 enum_arg_parsing_break:
                         break;
-                    default :
+                    case STRING:
+                        *(String *)(data) = arg;
+                        break;
+                    default:
                         TODO("Other arguments types handling.");
                         break;
                 }

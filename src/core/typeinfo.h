@@ -21,6 +21,7 @@ typedef enum : u8 {
     VOID,
     STRUCT,
     ARRAY,
+    STRING,
     ENUM,
     TYPEDEF,
     UNKNOWN,
@@ -73,8 +74,6 @@ typedef struct {
     Type_Info *element_type;
     u64 length;
 } Type_Info_Array;
-
-
 
 typedef struct {
     String name;
