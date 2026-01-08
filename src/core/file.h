@@ -69,6 +69,34 @@ static inline int fwrite_float(float value, FILE *file) {
     return fwrite(&bits, 4, 1, file);
 }
 
+static inline u32 read_u32(u8 **ptr) {
+    u32 value;
+    memcpy(&value, *ptr, 4);
+    *ptr += 4;
+    return from_le32(value);
+}
+
+static inline u64 read_u64(u8 **ptr) {
+    u64 value;
+    memcpy(&value, *ptr, 8);
+    *ptr += 8;
+    return from_le64(value);
+}
+
+static inline float read_float(u8 **ptr) {
+    u32 bits;
+    memcpy(&bits, *ptr, 4);
+    *ptr += 4;
+    bits = from_le32(bits);
+    float value;
+    memcpy(&value, &bits, 4);
+    return value;
+}
+
+static inline u8 read_byte(u8 **ptr) {
+    return *(*ptr)++;
+}
+
 
 
 

@@ -1010,37 +1010,102 @@ void editor_draw() {
 // 0x6c766c00 stands for 'lvl' in ascii
 #define EDITOR_LEVEL_FORMAT_HEADER 0x6c766c00
 
-void editor_save(String name) {
+static const String level_path = STR_BUFFER("res/level/");
+static const String level_format = STR_BUFFER(".level");
+
+void editor_write(String name) {
     // Saves current editor level by the name provided.
-    char file_name[name.length + 1];
-    str_copy_to(name, file_name);
-    file_name[name.length] = '\0';
+    char file_name[level_path.length + name.length + level_format.length + 1];
+    str_copy_to(level_path, file_name);
+    str_copy_to(name, file_name + level_path.length);
+    str_copy_to(level_format, file_name + level_path.length + name.length);
+    file_name[level_path.length + name.length + level_format.length] = '\0';
 
     FILE *file = fopen(file_name, "wb");
     if (file == NULL) {
-        console_log("Couldn't open the level file for writing '%.*s'.\n", UNPACK(name));
+        console_log("Couldn't open the level file for writing '%s'.\n", file_name);
         return;
     }
 
     u64 written = 0; 
     
-    written += fwrite_u32(EDITOR_LEVEL_FORMAT_HEADER, file);
+    written += fwrite_u32(EDITOR_LEVEL_FORMAT_HEADER, file) * 4;
 
     // Serializing each edge information.
-    written += fwrite_u32(array_list_length(&edges_list), file);
+    written += fwrite_u32(array_list_length(&edges_list), file) * 4;
     
     for (u32 i = 0; i < array_list_length(&edges_list); i++) {
-        written += fwrite_float(edges_list[i].vertex.x, file);
-        written += fwrite_float(edges_list[i].vertex.y, file);
-        written += fwrite_u32(edges_list[i].previous_index, file);
-        written += fwrite_u32(edges_list[i].next_index, file);
+        written += fwrite_float(edges_list[i].vertex.x, file) * 4;
+        written += fwrite_float(edges_list[i].vertex.y, file) * 4;
+        written += fwrite_u32(edges_list[i].previous_index, file) * 4;
+        written += fwrite_u32(edges_list[i].next_index, file) * 4;
         written += fwrite(&edges_list[i].flipped_normal, 1, 1, file);
-        written += fwrite(&edges_list[i].flags, 1, 1, file);
     }
 
     fclose(file);
 
-    console_log("Written %llu bytes to level file '%.*s'.\n", written, UNPACK(name));
+    console_log("Written %llu bytes to level file '%s'.\n", written, file_name);
+}
+
+void editor_read(String name) {
+    char file_name[level_path.length + name.length + level_format.length + 1];
+    str_copy_to(level_path, file_name);
+    str_copy_to(name, file_name + level_path.length);
+    str_copy_to(level_format, file_name + level_path.length + name.length);
+    file_name[level_path.length + name.length + level_format.length] = '\0';
+
+    FILE *file = fopen(file_name, "rb");
+    if (file == NULL) {
+        console_log("Couldn't open the level file for reading '%s'.\n", file_name);
+        return;
+    }
+
+    (void)fseek(file, 0, SEEK_END);
+    u64 size = ftell(file);
+    rewind(file);
+
+    u8 *buffer = malloc(size);
+    if (buffer == NULL) {
+        console_log("Memory allocation for buffer failed while reading the file '%s'.\n", file_name);
+        (void)fclose(file);
+        return;
+    }
+
+    if (fread(buffer, 1, size, file) != size) {
+        console_log("Failure reading the file '%s'.\n", file_name);
+        (void)fclose(file);
+        free(buffer);
+        return;
+    }
+
+    (void)fclose(file);
+
+
+    u8 *ptr = buffer;
+
+    if (read_u32(&ptr) != EDITOR_LEVEL_FORMAT_HEADER) {
+        console_log("Failure reading the level file '%s', format header doesn't match.\n", file_name);
+        free(buffer);
+        return;
+    }
+
+    u32 edge_count = read_u32(&ptr);
+
+    array_list_clear(&edges_list);
+    for (u32 i = 0; i < edge_count; i++) {
+        array_list_append(&edges_list, ((Editor_Edge) {0}));
+        edges_list[i].vertex.x = read_float(&ptr);
+        edges_list[i].vertex.y = read_float(&ptr);
+        edges_list[i].previous_index = read_u32(&ptr);
+        edges_list[i].next_index = read_u32(&ptr);
+        edges_list[i].flipped_normal = read_byte(&ptr);
+    }
+
+
+    
+    free(buffer);
+    
+    console_log("Read %llu bytes into the editor from '%s' level file.\n", ptr - buffer, file_name);
 }
 
 void editor_add_quad() {

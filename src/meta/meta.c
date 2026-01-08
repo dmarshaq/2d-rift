@@ -362,7 +362,7 @@ void registered_functions_init() {
 
 void type_table_init() {
     arena_strings                       = arena_make(4*KB);
-    arena_type_info                     = arena_make(2*KB);
+    arena_type_info                     = arena_make(4*KB);
     arena_type_info_function_argument   = arena_make(2*KB);
     arena_type_info_struct_member       = arena_make(2*KB);
     arena_type_info_enum_member         = arena_make(2*KB);

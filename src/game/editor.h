@@ -25,11 +25,15 @@ bool editor_update();
 void editor_draw();
 
 /**
- * Saves current editor level by the name provided.
+ * Writes current editor level by the name provided.
  */
 @Introspect;
 @RegisterCommand;
-void editor_save(String name);
+void editor_write(String name);
+
+@Introspect;
+@RegisterCommand;
+void editor_read(String name);
 
 @Introspect;
 @RegisterCommand;
