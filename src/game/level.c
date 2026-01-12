@@ -65,8 +65,6 @@ void level_manager_init(State *s) {
     state->level.flags = 0;
 }
 
-#define GEOMETRY_STATIC_FRICTION 0.7f
-#define GEOMETRY_DYNAMIC_FRICTION 0.4f
 
 
 const String LEVEL_FILE_PATH   = STR_BUFFER("res/level/");
@@ -171,6 +169,20 @@ void level_load(String name) {
             });
 
 
+    // Physics objects
+    level_add_entity((Entity) {
+            .phys_box = phys_box_make(vec2f_make(1.0f, 1.0f), 1.0f, 1.0f, 0.0f, 55.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, true, true, false, true),
+            .type = PROP_PHYSICS, 
+            .prop_physics = (Prop_Physics) { .color = VEC4F_CYAN, }, 
+            });
+
+    level_add_entity((Entity) {
+            .phys_box = phys_box_make(vec2f_make(-1.0f, 1.0f), 0.5f, 1.4f, PI / 4.0f, 40.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, true, true, false, true),
+            .type = PROP_PHYSICS, 
+            .prop_physics = (Prop_Physics) { .color = VEC4F_CYAN, }, 
+            });
+
+
     // Level blockout
     // level_add_entity((Entity) {
     //         .phys_box = phys_box_make(vec2f_make(2.0f, -1.5f), 12.0f, 3.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
@@ -226,18 +238,6 @@ void level_load(String name) {
     //         .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
     //         });
 
-    // // Physics objects
-    // level_add_entity((Entity) {
-    //         .phys_box = phys_box_make(vec2f_make(5.5f, 0.5f), 1.0f, 1.0f, 0.0f, 55.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, true, true, false, true),
-    //         .type = PROP_PHYSICS, 
-    //         .prop_physics = (Prop_Physics) { .color = VEC4F_CYAN, }, 
-    //         });
-
-    // level_add_entity((Entity) {
-    //         .phys_box = phys_box_make(vec2f_make(6.5f, 1.5f), 0.5f, 1.4f, PI / 4.0f, 40.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, true, true, false, true),
-    //         .type = PROP_PHYSICS, 
-    //         .prop_physics = (Prop_Physics) { .color = VEC4F_CYAN, }, 
-    //         });
 
     // // Triggers, in future make triggers send events, it is usefull for 1. in editor set up of logic, and in more organized game logic, that can be more controlled, especially if events can be delayed and so on...
     // level_add_entity((Entity) {
@@ -264,7 +264,7 @@ void level_update() {
     // Player control stuff.
     if (!console_active()) {
         float x_vel = 0.0f;
-        float y_vel = 0.0f;
+        // float y_vel = 0.0f;
 
         if (hold(SDLK_d)) {
             x_vel += 1.0f;
@@ -272,22 +272,22 @@ void level_update() {
         if (hold(SDLK_a)) {
             x_vel -= 1.0f;
         }
-        if (hold(SDLK_w)) {
-            y_vel += 1.0f;
-        } 
-        if (hold(SDLK_s)) {
-            y_vel -= 1.0f;
-        }
+        // if (hold(SDLK_w)) {
+        //     y_vel += 1.0f;
+        // } 
+        // if (hold(SDLK_s)) {
+        //     y_vel -= 1.0f;
+        // }
 
         x_vel *= 5.0f;
-        y_vel *= 5.0f;
+        // y_vel *= 5.0f;
 
         player->phys_box.body.velocity.x = x_vel;
-        player->phys_box.body.velocity.y = y_vel;
+        // player->phys_box.body.velocity.y = y_vel;
 
-        // if (pressed(SDLK_SPACE) && player->phys_box.grounded) {
-        //     phys_apply_force(&player->phys_box.body, vec2f_make(0.0f, 425.0f));
-        // }
+        if (pressed(SDLK_SPACE) && player->phys_box.grounded) {
+            phys_apply_force(&player->phys_box.body, vec2f_make(0.0f, 425.0f));
+        }
     }
 
 

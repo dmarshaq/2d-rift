@@ -30,8 +30,8 @@ void phys_init(State *state) {
  * Physics.
  */
 
-// static const Vec2f GRAVITY_ACCELERATION = (Vec2f){ 0.0f, -9.81f };
-static const Vec2f GRAVITY_ACCELERATION = (Vec2f){ 0.0f, 0.0f };
+static const Vec2f GRAVITY_ACCELERATION = (Vec2f){ 0.0f, -9.81f };
+// static const Vec2f GRAVITY_ACCELERATION = (Vec2f){ 0.0f, 0.0f };
 static const u8 MAX_IMPULSES = 16;
 static const u8 MAX_PHYS_BOXES = 16;
 static const u8 PHYS_ITERATIONS = 16;
@@ -144,7 +144,7 @@ float phys_sat_min_depth_on_normal_obb_polygon(OBB *obb, Vec2f axis, Phys_Polygo
 
 
     
-    float maxB = FLT_MIN;
+    float maxB = -FLT_MAX;
     float minB = FLT_MAX;
     float dot;
     for (u32 i = 0; i < polygon->edges_count; i++) {
@@ -485,6 +485,139 @@ void phys_resolve_phys_box_collision_with_rotation_friction(Phys_Box *box1, Phys
         box2->body.angular_velocity += p_calc_vars.res_angular_acceleration2;
 }
 
+void phys_resolve_phys_box_polygon_collision_with_rotation_friction(Phys_Box *box1, Phys_Polygon *polygon, Vec2f normal, Vec2f *contacts, u32 contacts_count) {
+    Vec2f polygon_center = phys_polygon_center(polygon);
+
+    // Setting up variables that can be calculated without contact points.
+    p_calc_vars.e  = fminf(box1->body.restitution, LEVEL_GEOMETRY_RESTITUTION);
+    p_calc_vars.sf = (box1->body.static_friction + LEVEL_GEOMETRY_STATIC_FRICTION) / 2;
+    p_calc_vars.df = (box1->body.dynamic_friction + LEVEL_GEOMETRY_DYNAMIC_FRICTION) / 2;
+
+    // Init resulat vars to default values.
+    p_calc_vars.res_velocity1 = VEC2F_ORIGIN;
+    p_calc_vars.res_velocity2 = VEC2F_ORIGIN;
+    p_calc_vars.res_angular_acceleration1 = 0.0f;
+    p_calc_vars.res_angular_acceleration2 = 0.0f;
+
+
+    p_calc_vars.r1 = VEC2F_ORIGIN;
+    p_calc_vars.r2 = VEC2F_ORIGIN;
+    p_calc_vars.impulse = VEC2F_ORIGIN;
+
+    p_calc_vars.j[0] = 0.0f;
+    p_calc_vars.j[1] = 0.0f;
+
+    // Calculating impulses and vectors to contact points, for each contact point.
+    for (u32 i = 0; i < contacts_count; i++) {
+        p_calc_vars.r1 = vec2f_difference(contacts[i], box1->body.mass_center);
+        p_calc_vars.r2 = vec2f_difference(contacts[i], polygon_center);
+
+        p_calc_vars.angular_lin_velocity1 = vec2f_multi_constant(vec2f_make(-p_calc_vars.r1.y, p_calc_vars.r1.x), box1->body.angular_velocity);
+        // p_calc_vars.angular_lin_velocity2 = vec2f_multi_constant(vec2f_make(-p_calc_vars.r2.y, p_calc_vars.r2.x), box2->body.angular_velocity);
+        p_calc_vars.angular_lin_velocity2 = VEC2F_ORIGIN;
+
+        p_calc_vars.relative_velocity = vec2f_difference(vec2f_sum(VEC2F_ORIGIN, p_calc_vars.angular_lin_velocity2), vec2f_sum(box1->body.velocity, p_calc_vars.angular_lin_velocity1));
+
+        p_calc_vars.contact_velocity_mag = vec2f_dot(p_calc_vars.relative_velocity, normal);
+
+
+        if (p_calc_vars.contact_velocity_mag > 0.0f) {
+            continue;
+        }
+
+        p_calc_vars.r1_perp_dot_n = vec2f_cross(p_calc_vars.r1, normal);
+        p_calc_vars.r2_perp_dot_n = vec2f_cross(p_calc_vars.r2, normal);
+
+        p_calc_vars.j[i] = -(1.0f + p_calc_vars.e) * p_calc_vars.contact_velocity_mag;
+        p_calc_vars.j[i] /= box1->body.inv_mass + LEVEL_GEOMETRY_INV_MASS + (p_calc_vars.r1_perp_dot_n * p_calc_vars.r1_perp_dot_n) * box1->body.inv_inertia + (p_calc_vars.r2_perp_dot_n * p_calc_vars.r2_perp_dot_n) * LEVEL_GEOMETRY_INV_INERTIA;
+        p_calc_vars.j[i] /= (float)contacts_count;
+
+
+
+        p_calc_vars.impulse = vec2f_multi_constant(normal, p_calc_vars.j[i]);
+
+        p_calc_vars.res_velocity1 = vec2f_sum(p_calc_vars.res_velocity1, vec2f_multi_constant(vec2f_negate(p_calc_vars.impulse), box1->body.inv_mass));
+        p_calc_vars.res_angular_acceleration1 += -vec2f_cross(p_calc_vars.r1, p_calc_vars.impulse) * box1->body.inv_inertia;
+
+        p_calc_vars.res_velocity2 = vec2f_sum(p_calc_vars.res_velocity2, vec2f_multi_constant(p_calc_vars.impulse, LEVEL_GEOMETRY_INV_MASS));
+        p_calc_vars.res_angular_acceleration2 += vec2f_cross(p_calc_vars.r2, p_calc_vars.impulse) * LEVEL_GEOMETRY_INV_INERTIA;
+    }
+
+    box1->body.velocity = vec2f_sum(box1->body.velocity, p_calc_vars.res_velocity1);
+    if (box1->rotatable)
+        box1->body.angular_velocity += p_calc_vars.res_angular_acceleration1;
+
+    // box2->body.velocity = vec2f_sum(box2->body.velocity, p_calc_vars.res_velocity2);
+    // if (box2->rotatable)
+    //     box2->body.angular_velocity += p_calc_vars.res_angular_acceleration2;
+
+
+
+    p_calc_vars.res_velocity1 = VEC2F_ORIGIN;
+    p_calc_vars.res_velocity2 = VEC2F_ORIGIN;
+    p_calc_vars.res_angular_acceleration1 = 0.0f;
+    p_calc_vars.res_angular_acceleration2 = 0.0f;
+
+
+    p_calc_vars.r1 = VEC2F_ORIGIN;
+    p_calc_vars.r2 = VEC2F_ORIGIN;
+    p_calc_vars.impulse = VEC2F_ORIGIN;
+
+
+    // Friction.
+    for (u32 i = 0; i < contacts_count; i++) {
+        p_calc_vars.r1 = vec2f_difference(contacts[i], box1->body.mass_center);
+        p_calc_vars.r2 = vec2f_difference(contacts[i], polygon_center);
+
+        p_calc_vars.angular_lin_velocity1 = vec2f_multi_constant(vec2f_make(-p_calc_vars.r1.y, p_calc_vars.r1.x), box1->body.angular_velocity);
+        // p_calc_vars.angular_lin_velocity2 = vec2f_multi_constant(vec2f_make(-p_calc_vars.r2.y, p_calc_vars.r2.x), box2->body.angular_velocity);
+        p_calc_vars.angular_lin_velocity2 = VEC2F_ORIGIN;
+
+        p_calc_vars.relative_velocity = vec2f_difference(vec2f_sum(VEC2F_ORIGIN, p_calc_vars.angular_lin_velocity2), vec2f_sum(box1->body.velocity, p_calc_vars.angular_lin_velocity1));
+
+        Vec2f tanget = vec2f_difference(p_calc_vars.relative_velocity, vec2f_multi_constant(normal, vec2f_dot(p_calc_vars.relative_velocity, normal)));
+
+        
+        if (fequal(tanget.x, 0.0f) && fequal(tanget.y, 0.0f)) {
+            continue;
+        }
+
+        tanget = vec2f_normalize(tanget);
+
+        p_calc_vars.r1_perp_dot_n = vec2f_cross(p_calc_vars.r1, tanget);
+        p_calc_vars.r2_perp_dot_n = vec2f_cross(p_calc_vars.r2, tanget);
+
+        p_calc_vars.jt = -vec2f_dot(p_calc_vars.relative_velocity, tanget);
+        p_calc_vars.jt /= box1->body.inv_mass + LEVEL_GEOMETRY_INV_MASS + (p_calc_vars.r1_perp_dot_n * p_calc_vars.r1_perp_dot_n) * box1->body.inv_inertia + (p_calc_vars.r2_perp_dot_n * p_calc_vars.r2_perp_dot_n) * LEVEL_GEOMETRY_INV_INERTIA;
+        p_calc_vars.jt /= (float)contacts_count;
+
+        // Collumbs law.
+        if (fabsf(p_calc_vars.jt) <= p_calc_vars.j[i] * p_calc_vars.sf) {
+            // friction_impulses[i] = vec2f_multi_constant(tanget, p_calc_vars.jt);
+            p_calc_vars.impulse = vec2f_multi_constant(tanget, p_calc_vars.jt);
+        }
+        else {
+            // friction_impulses[i] = vec2f_multi_constant(tanget, -j_array[i] * p_calc_vars.df);
+            p_calc_vars.impulse = vec2f_multi_constant(tanget, -p_calc_vars.j[i] * p_calc_vars.df);
+        }
+
+        p_calc_vars.res_velocity1 = vec2f_sum(p_calc_vars.res_velocity1, vec2f_multi_constant(vec2f_negate(p_calc_vars.impulse), box1->body.inv_mass));
+        p_calc_vars.res_angular_acceleration1 += -vec2f_cross(p_calc_vars.r1, p_calc_vars.impulse) * box1->body.inv_inertia;
+
+        p_calc_vars.res_velocity2 = vec2f_sum(p_calc_vars.res_velocity2, vec2f_multi_constant(p_calc_vars.impulse, LEVEL_GEOMETRY_INV_MASS));
+        p_calc_vars.res_angular_acceleration2 += vec2f_cross(p_calc_vars.r2, p_calc_vars.impulse) * LEVEL_GEOMETRY_INV_INERTIA;
+    }
+
+    box1->body.velocity = vec2f_sum(box1->body.velocity, p_calc_vars.res_velocity1);
+    if (box1->rotatable)
+        box1->body.angular_velocity += p_calc_vars.res_angular_acceleration1;
+
+    // box2->body.velocity = vec2f_sum(box2->body.velocity, p_calc_vars.res_velocity2);
+    // if (box2->rotatable)
+    //     box2->body.angular_velocity += p_calc_vars.res_angular_acceleration2;
+}
+
+
 void phys_resolve_dynamic_body_collision_with_friction(Body_2D *body1, Body_2D *body2, Vec2f normal, Vec2f *contacts, u32 contacts_count) {
     // Calculated variables, used in both loops.
     Vec2f impulses[2] = { VEC2F_ORIGIN, VEC2F_ORIGIN };
@@ -644,6 +777,66 @@ u32 phys_find_contanct_points_obb(OBB* obb1, OBB* obb2, Vec2f *points) {
     return count;
 }
 
+u32 phys_find_contanct_points_obb_polygon(OBB* obb, Phys_Polygon* polygon, Vec2f *points) {
+    Vec2f verticies[4];
+
+    verticies[0] = obb_p0(obb);
+    verticies[1] = obb_p2(obb);
+    verticies[2] = obb_p1(obb);
+    verticies[3] = obb_p3(obb);
+
+    
+    Vec2f a, b;
+    float min_dist = FLT_MAX;
+    float dist = 0.0f;
+    u32 count = 0;
+
+    for (u32 i = 0; i < 4; i++) {
+        for (u32 j = 0; j < polygon->edges_count; j++) {
+            a = polygon->edges[j].vertex;
+            b = polygon->edges[(j + 1) % polygon->edges_count].vertex;
+
+            dist = point_segment_min_distance(verticies[i], a, b);
+
+            if (fequal(dist, min_dist)) {
+                if (!(fequal(verticies[i].x, verticies[i].y) && fequal(points[0].x, points[0].y))) {
+                    points[1] = verticies[i];
+                    count = 2;
+                }
+            }
+            else if (dist < min_dist) {
+                min_dist = dist;
+                points[0] = verticies[i];
+                count = 1;
+            }
+        }
+    }
+
+    for (u32 i = 0; i < polygon->edges_count; i++) {
+        for (u32 j = 0; j < 4; j++) {
+            a = verticies[j];
+            b = verticies[(j + 1) % 4];
+
+            dist = point_segment_min_distance(polygon->edges[i].vertex, a, b);
+
+            if (fequal(dist, min_dist)) {
+                if (!(fequal(polygon->edges[i].vertex.x, polygon->edges[i].vertex.y) && fequal(points[0].x, points[0].y))) {
+                    points[1] = polygon->edges[i].vertex;
+                    count = 2;
+                }
+            }
+            else if (dist < min_dist) {
+                min_dist = dist;
+                points[0] = polygon->edges[i].vertex;
+                count = 1;
+            }
+        }
+    }
+
+    return count;
+}
+
+
 
 void phys_update(Phys_Box *phys_boxes, s64 count, s64 stride) {
     float depth;
@@ -732,8 +925,6 @@ void phys_update(Phys_Box *phys_boxes, s64 count, s64 stride) {
             for (s64 i = 0; i < polygons_count; i++) {
                 if (phys_sat_check_collision_obb_polygon(&box1->bound_box, polygons + i)) {
 
-
-                    
                     // Fidning depth and normal of collision.
                     phys_sat_find_min_depth_normal_obb_polygon(&box1->bound_box, polygons + i, &depth, &normal);
 
@@ -747,6 +938,10 @@ void phys_update(Phys_Box *phys_boxes, s64 count, s64 stride) {
                         box1->grounded = true;
 
                     box1->body.mass_center = box1->bound_box.center;
+
+                    // Detailed physics collision response resolution happens here.
+                    contacts_count = phys_find_contanct_points_obb_polygon(&box1->bound_box, polygons + i, contacts);
+                    phys_resolve_phys_box_polygon_collision_with_rotation_friction(box1, polygons + i, normal, contacts, contacts_count);
                 }
             }
         }

@@ -79,6 +79,19 @@ typedef struct phys_polygon {
     Phys_Edge *edges;
 } Phys_Polygon;
 
+static Vec2f phys_polygon_center(Phys_Polygon *polygon) {
+    Vec2f center = VEC2F_ORIGIN;
+
+    for (u32 i = 0; i < polygon->edges_count; i++) {
+        vec2f_sum(center, polygon->edges[i].vertex);
+    }
+
+    center = vec2f_divide_constant(center, polygon->edges_count);
+
+    return center;
+}
+
+
 
 static Phys_Box phys_box_make(Vec2f position, float width, float height, float rotation, float mass, float restitution, float static_friction, float dynamic_friction, bool dynamic, bool rotatable, bool destructible, bool gravitable) {
     Phys_Box phys_box;

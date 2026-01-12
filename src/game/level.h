@@ -8,6 +8,14 @@
 
 typedef struct state State;
 
+#define LEVEL_GEOMETRY_MASS             0.0f
+#define LEVEL_GEOMETRY_INV_MASS         0.0f
+#define LEVEL_GEOMETRY_INERTIA          0.0f
+#define LEVEL_GEOMETRY_INV_INERTIA      0.0f
+#define LEVEL_GEOMETRY_RESTITUTION      0.0f
+#define LEVEL_GEOMETRY_STATIC_FRICTION  0.7f
+#define LEVEL_GEOMETRY_DYNAMIC_FRICTION 0.4f
+
 // 0x6c65766c stands for 'levl' in ascii.
 #define LEVEL_FORMAT_HEADER 0x6c65766c
 
