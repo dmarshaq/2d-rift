@@ -1,12 +1,17 @@
 #ifndef EDITOR_H
 #define EDITOR_H
 
-// #include "game/game.h"
+#include "core/mathf.h"
+#include "core/str.h"
 
 typedef struct state State;
 
-#include "core/mathf.h"
-#include "core/str.h"
+// 0x65646974 stands for 'edit' in ascii.
+#define EDITOR_FORMAT_HEADER 0x65646974
+
+extern const String EDITOR_FILE_PATH;
+extern const String EDITOR_FILE_FORMAT;
+
 
 /**
  * Should be called one time, inits editor.
@@ -34,6 +39,10 @@ void editor_write(String name);
 @Introspect;
 @RegisterCommand;
 void editor_read(String name);
+
+@Introspect;
+@RegisterCommand;
+void editor_build(String name);
 
 @Introspect;
 @RegisterCommand;

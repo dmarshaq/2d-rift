@@ -8,8 +8,11 @@
 
 typedef struct state State;
 
+// 0x6c65766c stands for 'levl' in ascii.
+#define LEVEL_FORMAT_HEADER 0x6c65766c
 
-
+extern const String LEVEL_FILE_PATH;
+extern const String LEVEL_FILE_FORMAT;
 
 /**
  * Boilerplate for adding new entities.
@@ -60,11 +63,21 @@ typedef struct entity {
 } Entity;
 
 
+typedef enum level_flags : u8 {
+    LEVEL_LOADED = 0x01,
+} Level_Flags;
+
+
 typedef struct level {
     String name;
 
-    Entity *entities;
+    Level_Flags flags;
+
     s64 entities_count;
+    Entity *entities;
+
+    s64 phys_polygons_count;
+    Phys_Polygon *phys_polygons;
 } Level;
 
 
@@ -76,6 +89,8 @@ void level_manager_init(State *state);
 /**
  * Loads level into the memory.
  */
+@Introspect;
+@RegisterCommand;
 void level_load(String name);
 
 /**

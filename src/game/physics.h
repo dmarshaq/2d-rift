@@ -64,6 +64,22 @@ typedef struct phys_box {
 } Phys_Box;
 
 
+typedef struct phys_edge {
+    Vec2f vertex;
+    Vec2f normal;
+} Phys_Edge;
+
+/**
+ * Polygons are defined to be used as complex static convex geometry. Meaning it is any shape that is enclosed, convex and static.
+ * A great example is level geometry. 
+ * For now every level is composed of such polygons to easier work with SAT based collision.
+ */
+typedef struct phys_polygon {
+    u32 edges_count;
+    Phys_Edge *edges;
+} Phys_Polygon;
+
+
 static Phys_Box phys_box_make(Vec2f position, float width, float height, float rotation, float mass, float restitution, float static_friction, float dynamic_friction, bool dynamic, bool rotatable, bool destructible, bool gravitable) {
     Phys_Box phys_box;
     phys_box.bound_box = obb_make(position, width, height, rotation);
@@ -87,6 +103,7 @@ void phys_apply_force(Body_2D *body, Vec2f force);
 void phys_apply_acceleration(Body_2D *body, Vec2f acceleration);
 
 void phys_apply_angular_acceleration(Body_2D *body, float acceleration);
+
 
 /**
  * Takes in array of memory where phys_boxes are stored, count corresponds to count of phys boxes while stride corresponds to the offset in bytes that pointer should be moved to get next phys box.

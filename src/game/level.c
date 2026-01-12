@@ -4,6 +4,7 @@
 #include "game/draw.h"
 #include "game/graphics.h"
 #include "game/console.h"
+#include "game/physics.h"
 
 #include "core/mathf.h"
 #include "core/structs.h"
@@ -19,6 +20,8 @@ static Font_Baked font_medium;
 static Arena arena;
 static String info_buffer;
 static Entity *entities_allocation;
+static Phys_Edge *edges_allocation;
+static Phys_Polygon *polygon_list;
 
 
 // Player controller related.
@@ -56,17 +59,109 @@ void level_manager_init(State *s) {
     info_buffer.length = 256;
 
     entities_allocation = calloc(MAX_ENTITIES, sizeof(Entity));
+    edges_allocation = NULL;
+    polygon_list = array_list_make(Phys_Polygon, 8, &std_allocator);
+
+    state->level.flags = 0;
 }
 
 #define GEOMETRY_STATIC_FRICTION 0.7f
 #define GEOMETRY_DYNAMIC_FRICTION 0.4f
 
+
+const String LEVEL_FILE_PATH   = STR_BUFFER("res/level/");
+const String LEVEL_FILE_FORMAT = STR_BUFFER(".level");
+
 void level_load(String name) {
-    state->level = (Level) {
-        .name = name,
-        .entities = entities_allocation,
-        .entities_count = 0,
-    };
+    console_log("Loading '%.*s' level.\n", UNPACK(name));
+
+    state->level = (Level) {0};
+
+    char file_name[LEVEL_FILE_PATH.length + name.length + LEVEL_FILE_FORMAT.length + 1];
+    str_copy_to(LEVEL_FILE_PATH, file_name);
+    str_copy_to(name, file_name + LEVEL_FILE_PATH.length);
+    str_copy_to(LEVEL_FILE_FORMAT, file_name + LEVEL_FILE_PATH.length + name.length);
+    file_name[LEVEL_FILE_PATH.length + name.length + LEVEL_FILE_FORMAT.length] = '\0';
+
+    FILE *file = fopen(file_name, "rb");
+    if (file == NULL) {
+        console_log("Couldn't open the level file for loading in game '%s'.\n", file_name);
+        return;
+    }
+    
+    (void)fseek(file, 0, SEEK_END);
+    u64 size = ftell(file);
+    rewind(file);
+
+    u8 *buffer = malloc(size);
+    if (buffer == NULL) {
+        console_log("Memory allocation for buffer failed while reading the file '%s'.\n", file_name);
+        (void)fclose(file);
+        return;
+    }
+
+    if (fread(buffer, 1, size, file) != size) {
+        console_log("Failure reading the file '%s'.\n", file_name);
+        (void)fclose(file);
+        free(buffer);
+        return;
+    }
+
+    (void)fclose(file);
+
+
+    u8 *ptr = buffer;
+
+    // @Copypasta from editor.c
+    if (read_u32(&ptr) != LEVEL_FORMAT_HEADER) {
+        console_log("Failure reading the level file '%s' into the game, format header doesn't match.\n", file_name);
+        free(buffer);
+        return;
+    }
+
+    u32 edge_count = read_u32(&ptr);
+
+    // @Temporary: Find better approach for level geometry memory management.
+    if (edges_allocation != NULL) {
+        console_log("Reallocating memory for level geometry.\n");
+        edges_allocation = realloc(edges_allocation, edge_count * sizeof(Phys_Edge));
+    } else {
+        console_log("Allocating memory for level geometry.\n");
+        edges_allocation = malloc(edge_count * sizeof(Phys_Edge));
+    }
+
+    array_list_clear(&polygon_list);
+
+    // Reusing edge count variable.
+    edge_count = 0;
+    u32 polygon_edge_count;
+    while (ptr < buffer + size) {
+        polygon_edge_count = read_u32(&ptr);
+        
+        array_list_append(&polygon_list, ((Phys_Polygon) { .edges_count = polygon_edge_count, .edges = edges_allocation + edge_count }));
+        for (u32 i = 0; i < polygon_edge_count; i++) {
+            (edges_allocation + edge_count + i)->vertex.x = read_float(&ptr);
+            (edges_allocation + edge_count + i)->vertex.y = read_float(&ptr);
+            (edges_allocation + edge_count + i)->normal.x = read_float(&ptr);
+            (edges_allocation + edge_count + i)->normal.y = read_float(&ptr);
+        }
+
+        edge_count += polygon_edge_count;
+    }
+
+    free(buffer);
+
+
+    console_log("Read %llu bytes into the game from '%s' level file.\n", ptr - buffer, file_name);
+
+
+    state->level.name = name;
+    state->level.entities_count = 0;
+    state->level.entities = entities_allocation;
+    state->level.phys_polygons_count = array_list_length(&polygon_list);
+    state->level.phys_polygons = polygon_list;
+    state->level.flags |= LEVEL_LOADED;
+    
 
     // Player
     player = state->level.entities + level_add_entity((Entity) { 
@@ -74,95 +169,102 @@ void level_load(String name) {
             .type = PLAYER, 
             .player = (Player) { .color = VEC4F_YELLOW, }, 
             });
-    
+
+
     // Level blockout
-    level_add_entity((Entity) {
-            .phys_box = phys_box_make(vec2f_make(2.0f, -1.5f), 12.0f, 3.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-            .type = PROP_STATIC, 
-            .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
-            });
+    // level_add_entity((Entity) {
+    //         .phys_box = phys_box_make(vec2f_make(2.0f, -1.5f), 12.0f, 3.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+    //         .type = PROP_STATIC, 
+    //         .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
+    //         });
 
-    level_add_entity((Entity) {
-            .phys_box = phys_box_make(vec2f_make(-8.0f, -3.0f), 8.0f, 12.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-            .type = PROP_STATIC, 
-            .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
-            });
+    // level_add_entity((Entity) {
+    //         .phys_box = phys_box_make(vec2f_make(-8.0f, -3.0f), 8.0f, 12.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+    //         .type = PROP_STATIC, 
+    //         .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
+    //         });
 
-    level_add_entity((Entity) {
-            .phys_box = phys_box_make(vec2f_make(-9.5f, 7.0f), 5.0f, 8.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-            .type = PROP_STATIC, 
-            .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
-            });
+    // level_add_entity((Entity) {
+    //         .phys_box = phys_box_make(vec2f_make(-9.5f, 7.0f), 5.0f, 8.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+    //         .type = PROP_STATIC, 
+    //         .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
+    //         });
 
-    level_add_entity((Entity) {
-            .phys_box = phys_box_make(vec2f_make(2.5f, -6.0f), 13.0f, 6.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-            .type = PROP_STATIC, 
-            .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
-            });
+    // level_add_entity((Entity) {
+    //         .phys_box = phys_box_make(vec2f_make(2.5f, -6.0f), 13.0f, 6.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+    //         .type = PROP_STATIC, 
+    //         .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
+    //         });
 
-    level_add_entity((Entity) {
-            .phys_box = phys_box_make(vec2f_make(13.5f, 0.5f), 3.0f, 1.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-            .type = PROP_STATIC, 
-            .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
-            });
+    // level_add_entity((Entity) {
+    //         .phys_box = phys_box_make(vec2f_make(13.5f, 0.5f), 3.0f, 1.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+    //         .type = PROP_STATIC, 
+    //         .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
+    //         });
 
-    level_add_entity((Entity) {
-            .phys_box = phys_box_make(vec2f_make(20.0f, -6.0f), 12.0f, 6.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-            .type = PROP_STATIC, 
-            .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
-            });
+    // level_add_entity((Entity) {
+    //         .phys_box = phys_box_make(vec2f_make(20.0f, -6.0f), 12.0f, 6.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+    //         .type = PROP_STATIC, 
+    //         .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
+    //         });
 
-    level_add_entity((Entity) {
-            .phys_box = phys_box_make(vec2f_make(21.5f, -2.0f), 9.0f, 2.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-            .type = PROP_STATIC, 
-            .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
-            });
+    // level_add_entity((Entity) {
+    //         .phys_box = phys_box_make(vec2f_make(21.5f, -2.0f), 9.0f, 2.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+    //         .type = PROP_STATIC, 
+    //         .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
+    //         });
 
-    level_add_entity((Entity) {
-            .phys_box = phys_box_make(vec2f_make(23.0f, 1.0f), 6.0f, 4.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-            .type = PROP_STATIC, 
-            .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
-            });
+    // level_add_entity((Entity) {
+    //         .phys_box = phys_box_make(vec2f_make(23.0f, 1.0f), 6.0f, 4.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+    //         .type = PROP_STATIC, 
+    //         .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
+    //         });
 
-    level_add_entity((Entity) {
-            .phys_box = phys_box_make(vec2f_make(19.5f, 2.5f), 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-            .type = PROP_STATIC, 
-            .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
-            });
+    // level_add_entity((Entity) {
+    //         .phys_box = phys_box_make(vec2f_make(19.5f, 2.5f), 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+    //         .type = PROP_STATIC, 
+    //         .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
+    //         });
 
-    // Physics objects
-    level_add_entity((Entity) {
-            .phys_box = phys_box_make(vec2f_make(5.5f, 0.5f), 1.0f, 1.0f, 0.0f, 55.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, true, true, false, true),
-            .type = PROP_PHYSICS, 
-            .prop_physics = (Prop_Physics) { .color = VEC4F_CYAN, }, 
-            });
+    // // Physics objects
+    // level_add_entity((Entity) {
+    //         .phys_box = phys_box_make(vec2f_make(5.5f, 0.5f), 1.0f, 1.0f, 0.0f, 55.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, true, true, false, true),
+    //         .type = PROP_PHYSICS, 
+    //         .prop_physics = (Prop_Physics) { .color = VEC4F_CYAN, }, 
+    //         });
 
-    level_add_entity((Entity) {
-            .phys_box = phys_box_make(vec2f_make(6.5f, 1.5f), 0.5f, 1.4f, PI / 4.0f, 40.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, true, true, false, true),
-            .type = PROP_PHYSICS, 
-            .prop_physics = (Prop_Physics) { .color = VEC4F_CYAN, }, 
-            });
+    // level_add_entity((Entity) {
+    //         .phys_box = phys_box_make(vec2f_make(6.5f, 1.5f), 0.5f, 1.4f, PI / 4.0f, 40.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, true, true, false, true),
+    //         .type = PROP_PHYSICS, 
+    //         .prop_physics = (Prop_Physics) { .color = VEC4F_CYAN, }, 
+    //         });
 
-    // Triggers, in future make triggers send events, it is usefull for 1. in editor set up of logic, and in more organized game logic, that can be more controlled, especially if events can be delayed and so on...
-    level_add_entity((Entity) {
-            .phys_box = (Phys_Box) {0},
-            .type = TRIGGER, 
-            .trigger = (Trigger) { .name = CSTR("finish"), .bound_box = obb_make(vec2f_make(24.0f, 5.0f), 2.0f, 4.0f, 0.0f)}, 
-            });
+    // // Triggers, in future make triggers send events, it is usefull for 1. in editor set up of logic, and in more organized game logic, that can be more controlled, especially if events can be delayed and so on...
+    // level_add_entity((Entity) {
+    //         .phys_box = (Phys_Box) {0},
+    //         .type = TRIGGER, 
+    //         .trigger = (Trigger) { .name = CSTR("finish"), .bound_box = obb_make(vec2f_make(24.0f, 5.0f), 2.0f, 4.0f, 0.0f)}, 
+    //         });
 
-    level_add_entity((Entity) {
-            .phys_box = (Phys_Box) {0},
-            .type = TRIGGER, 
-            .trigger = (Trigger) { .name = CSTR("pit"), .bound_box = obb_make(vec2f_make(8.0f, -11.0f), 24.0f, 4.0f, 0.0f)}, 
-            });
+    // level_add_entity((Entity) {
+    //         .phys_box = (Phys_Box) {0},
+    //         .type = TRIGGER, 
+    //         .trigger = (Trigger) { .name = CSTR("pit"), .bound_box = obb_make(vec2f_make(8.0f, -11.0f), 24.0f, 4.0f, 0.0f)}, 
+    //         });
+
 }
 
 
 
 void level_update() {
+    if (!(state->level.flags & LEVEL_LOADED)) {
+        return;
+    }
+
     // Player control stuff.
     if (!console_active()) {
         float x_vel = 0.0f;
+        float y_vel = 0.0f;
 
         if (hold(SDLK_d)) {
             x_vel += 1.0f;
@@ -170,14 +272,22 @@ void level_update() {
         if (hold(SDLK_a)) {
             x_vel -= 1.0f;
         }
+        if (hold(SDLK_w)) {
+            y_vel += 1.0f;
+        } 
+        if (hold(SDLK_s)) {
+            y_vel -= 1.0f;
+        }
 
         x_vel *= 5.0f;
+        y_vel *= 5.0f;
 
         player->phys_box.body.velocity.x = x_vel;
+        player->phys_box.body.velocity.y = y_vel;
 
-        if (pressed(SDLK_SPACE) && player->phys_box.grounded) {
-            phys_apply_force(&player->phys_box.body, vec2f_make(0.0f, 425.0f));
-        }
+        // if (pressed(SDLK_SPACE) && player->phys_box.grounded) {
+        //     phys_apply_force(&player->phys_box.body, vec2f_make(0.0f, 425.0f));
+        // }
     }
 
 
@@ -211,6 +321,10 @@ void level_update() {
 }
 
 void level_draw() {
+    if (!(state->level.flags & LEVEL_LOADED)) {
+        return;
+    }
+
     Matrix4f projection;
 
     projection = camera_calculate_projection(&state->main_camera, state->window.width, state->window.height);
@@ -242,6 +356,28 @@ void level_draw() {
 
     draw_end();
 
+
+    // Drawing lines. 
+    shader_update_projection(state->line_drawer.program, &projection);
+
+    line_draw_begin(&state->line_drawer);
+
+    Vec2f midpoint, v0, v1;
+    for (u32 i = 0; i < array_list_length(&polygon_list); i++) {
+        for (u32 j = 0; j < polygon_list[i].edges_count; j++) {
+            v0 = polygon_list[i].edges[j].vertex;
+            v1 = polygon_list[i].edges[(j + 1) % polygon_list[i].edges_count].vertex;
+
+            draw_line(v0, v1, VEC4F_WHITE, NULL);
+
+            midpoint = vec2f_make(v0.x + (v1.x - v0.x) / 2, v0.y + (v1.y - v0.y) / 2);
+
+            draw_line(midpoint, vec2f_sum(midpoint, vec2f_multi_constant(polygon_list[i].edges[j].normal, 0.4f)), VEC4F_BLUE, NULL);
+
+        }
+    }
+
+    line_draw_end();
 
 
 

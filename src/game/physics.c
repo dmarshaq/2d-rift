@@ -4,15 +4,23 @@
 #include "core/core.h"
 
 #include "game/game.h"
+#include "game/level.h"
+#include "game/console.h"
+
 
 
 
 // Pointers to global state.
-static Time_Info   *time_ptr;
+static Time_Info    *time_ptr;
+static Phys_Polygon **phys_polygons_ptr;
+static s64          *phys_polygons_count_ptr;
 
 void phys_init(State *state) {
     // Setting pointers to global state.
-    time_ptr           = &state->t;
+    time_ptr                = &state->t;
+    phys_polygons_count_ptr = &state->level.phys_polygons_count;
+    phys_polygons_ptr       = &state->level.phys_polygons;
+
 }
 
 
@@ -22,8 +30,8 @@ void phys_init(State *state) {
  * Physics.
  */
 
-static const Vec2f GRAVITY_ACCELERATION = (Vec2f){ 0.0f, -9.81f };
-// static const Vec2f GRAVITY_ACCELERATION = (Vec2f){ 0.0f, 0.0f };
+// static const Vec2f GRAVITY_ACCELERATION = (Vec2f){ 0.0f, -9.81f };
+static const Vec2f GRAVITY_ACCELERATION = (Vec2f){ 0.0f, 0.0f };
 static const u8 MAX_IMPULSES = 16;
 static const u8 MAX_PHYS_BOXES = 16;
 static const u8 PHYS_ITERATIONS = 16;
@@ -110,13 +118,42 @@ float phys_sat_min_depth_on_normal(OBB *obb1, Vec2f axis1, OBB *obb2) {
     float maxA = vec2f_dot(axis1, obb_p1(obb1));
 
     if (minA > maxA) {
+        float temp = minA;
         minA = maxA;
-        maxA = vec2f_dot(axis1, obb_p0(obb1));
+        maxA = temp;
     }
 
     // Getting minB and maxB out of 4 points. @Optimization: Maybe find a way to calculate dot products only once and reuse them to find min, max.
     float minB = fminf(fminf(vec2f_dot(axis1, obb_p0(obb2)), vec2f_dot(axis1, obb_p1(obb2))), fminf(vec2f_dot(axis1, obb_p2(obb2)), vec2f_dot(axis1, obb_p3(obb2))));
     float maxB = fmaxf(fmaxf(vec2f_dot(axis1, obb_p0(obb2)), vec2f_dot(axis1, obb_p1(obb2))), fmaxf(vec2f_dot(axis1, obb_p2(obb2)), vec2f_dot(axis1, obb_p3(obb2))));
+    
+    float dist1 = maxB - minA; 
+    float dist2 = maxA - minB; 
+
+    return fabsf(fminf(dist1, dist2)) * sig(dist1 * dist2);
+}
+
+/**
+ * Internal function.
+ * @Important: "axis" should always correspond to the axis alligned with "obb" or "polygon".
+ * Returns min separation between "obb" and "polygon" projected points on "axis".
+ */
+float phys_sat_min_depth_on_normal_obb_polygon(OBB *obb, Vec2f axis, Phys_Polygon *polygon) {
+    float minA = fminf(fminf(vec2f_dot(axis, obb_p0(obb)), vec2f_dot(axis, obb_p1(obb))), fminf(vec2f_dot(axis, obb_p2(obb)), vec2f_dot(axis, obb_p3(obb))));
+    float maxA = fmaxf(fmaxf(vec2f_dot(axis, obb_p0(obb)), vec2f_dot(axis, obb_p1(obb))), fmaxf(vec2f_dot(axis, obb_p2(obb)), vec2f_dot(axis, obb_p3(obb))));
+
+
+    
+    float maxB = FLT_MIN;
+    float minB = FLT_MAX;
+    float dot;
+    for (u32 i = 0; i < polygon->edges_count; i++) {
+        dot = vec2f_dot(axis, polygon->edges[i].vertex);
+        maxB = fmaxf(maxB, dot);
+        minB = fminf(minB, dot);
+    }
+
+
     
     float dist1 = maxB - minA; 
     float dist2 = maxA - minB; 
@@ -134,6 +171,18 @@ bool phys_sat_check_collision_obb(OBB *obb1, OBB *obb2) {
         phys_sat_min_depth_on_normal(obb2, obb_right(obb2), obb1) > 0.0f &&
         phys_sat_min_depth_on_normal(obb2, obb_up(obb2), obb1) > 0.0f;
 }
+
+bool phys_sat_check_collision_obb_polygon(OBB *obb, Phys_Polygon *polygon) {
+    for (u32 i = 0; i < polygon->edges_count; i++) {
+        if (phys_sat_min_depth_on_normal_obb_polygon(obb, polygon->edges[i].normal, polygon) < 0.0f) {
+            return false;
+        }
+    }
+
+    return phys_sat_min_depth_on_normal_obb_polygon(obb, obb_right(obb), polygon) > 0.0f &&
+        phys_sat_min_depth_on_normal_obb_polygon(obb, obb_up(obb), polygon) > 0.0f;
+}
+
 
 void phys_sat_find_min_depth_normal(OBB *obb1, OBB *obb2, float *depth, Vec2f *normal) {
     Vec2f normals[4] = {
@@ -157,13 +206,53 @@ void phys_sat_find_min_depth_normal(OBB *obb1, OBB *obb2, float *depth, Vec2f *n
     }
 
 
-    // Flip normal if it's not looking in direction of collosion.
+    // Flip normal if it's not looking in direction of collision.
     if (vec2f_dot(normals[0], vec2f_normalize(vec2f_difference(obb2->center, obb1->center))) < 0.0f) {
         normals[0] = vec2f_negate(normals[0]);
     }
 
     *depth = depths[0];
     *normal = normals[0];
+}
+
+void phys_sat_find_min_depth_normal_obb_polygon(OBB *obb, Phys_Polygon *polygon, float *depth, Vec2f *normal) {
+    Vec2f normals[2 + polygon->edges_count];
+    normals[0] = obb_right(obb);
+    normals[1] = obb_up(obb);
+
+    Vec2f polygon_center = VEC2F_ORIGIN;
+
+    for (u32 i = 0; i < polygon->edges_count; i++) {
+        normals[i + 2] = polygon->edges[i].normal;
+    
+        polygon_center = vec2f_sum(polygon_center, polygon->edges[i].vertex);
+    }
+
+    polygon_center = vec2f_divide_constant(polygon_center, polygon->edges_count);
+
+    
+    // This whole sat code garbage is awful, I hate it, but cannot refactor and replace it yet.
+    // I need to get the main gameplay done first before I do physics refactoring :(
+    float min_depth = FLT_MAX;
+
+    for (u32 i = 0; i < 2 + polygon->edges_count; i++) {
+        *depth = phys_sat_min_depth_on_normal_obb_polygon(obb, normals[i], polygon);
+        if (*depth < min_depth) {
+            min_depth = *depth;
+            *normal = normals[i];
+        }
+    }
+
+    *depth = min_depth;
+
+
+
+
+
+    // Flip normal if it's not looking in direction of collosion.
+    if (vec2f_dot(*normal, vec2f_normalize(vec2f_difference(polygon_center, obb->center))) < 0.0f) {
+        *normal = vec2f_negate(*normal);
+    }
 }
 
 /**
@@ -572,13 +661,15 @@ void phys_update(Phys_Box *phys_boxes, s64 count, s64 stride) {
             if (!box1->dynamic) {
                 continue;
             }
-            
+
+
             box1->grounded = false;
 
             // Applying gravity.
             if (box1->gravitable) {
                 box1->body.velocity = vec2f_sum(box1->body.velocity, vec2f_multi_constant(GRAVITY_ACCELERATION, time_ptr->delta_time * PHYS_ITERATION_STEP_TIME ));
             }
+
 
             // Applying velocities.
             box1->bound_box.center = vec2f_sum(box1->bound_box.center, vec2f_multi_constant(box1->body.velocity, time_ptr->delta_time * PHYS_ITERATION_STEP_TIME));
@@ -614,14 +705,12 @@ void phys_update(Phys_Box *phys_boxes, s64 count, s64 stride) {
 
                         if (grounded_dot > 0.7f)
                             box1->grounded = true;
-                    }
-                    else if (box2->dynamic && !box1->dynamic) {
+                    } else if (box2->dynamic && !box1->dynamic) {
                         phys_resolve_static_obb_collision(&box2->bound_box, depth, normal);
 
                         if (grounded_dot < -0.7f)
                             box2->grounded = true;
-                    }
-                    else {
+                    } else {
                         phys_resolve_dynamic_obb_collision(&box1->bound_box, &box2->bound_box, depth, normal);
 
                         if (grounded_dot > 0.7f)
@@ -635,6 +724,29 @@ void phys_update(Phys_Box *phys_boxes, s64 count, s64 stride) {
                     // Detailed physics collision response resolution happens here.
                     contacts_count = phys_find_contanct_points_obb(&box1->bound_box, &box2->bound_box, contacts);
                     phys_resolve_phys_box_collision_with_rotation_friction(box1, box2, normal, contacts, contacts_count);
+                }
+            }
+
+            s64 polygons_count = *phys_polygons_count_ptr;
+            Phys_Polygon *polygons = *phys_polygons_ptr;
+            for (s64 i = 0; i < polygons_count; i++) {
+                if (phys_sat_check_collision_obb_polygon(&box1->bound_box, polygons + i)) {
+
+
+                    
+                    // Fidning depth and normal of collision.
+                    phys_sat_find_min_depth_normal_obb_polygon(&box1->bound_box, polygons + i, &depth, &normal);
+
+                    // Calculating dot product to check if any objects are grounded.
+                    float grounded_dot = vec2f_dot(vec2f_normalize(GRAVITY_ACCELERATION), normal);
+
+
+                    phys_resolve_static_obb_collision(&box1->bound_box, depth, vec2f_negate(normal));
+
+                    if (grounded_dot > 0.7f)
+                        box1->grounded = true;
+
+                    box1->body.mass_center = box1->bound_box.center;
                 }
             }
         }

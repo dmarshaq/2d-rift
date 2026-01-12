@@ -256,7 +256,7 @@ void game_init(State *global_state) {
 
 
     // Setting game state.
-    state->game_state = GAME_STATE_EDITOR;
+    state->game_state = GAME_STATE_LEVEL;
 
 
     // Setting clear color.
@@ -264,11 +264,6 @@ void game_init(State *global_state) {
 
     // Logging hello world to the console.
     console_log("Hello world!\n");
-
-    String starting_level_name = CSTR("demo_01");
-    console_log("Loading: '%.*s' level.\n", UNPACK(starting_level_name));
-    
-    level_load(starting_level_name);
 }
 
 

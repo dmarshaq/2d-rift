@@ -39,6 +39,7 @@ static Editor_State editor_state;
 typedef enum editor_edge_flags : u8 {
     EDITOR_EDGE_SELECTED        = 0x01,
     EDITOR_EDGE_VERTEX_SELECTED = 0x02,
+    EDITOR_EDGE_BUILT           = 0x04,
 } Editor_Edge_Flags;
 
 typedef struct editor_edge {
@@ -1007,29 +1008,27 @@ void editor_draw() {
 }
 
 
-// 0x6c766c00 stands for 'lvl' in ascii
-#define EDITOR_LEVEL_FORMAT_HEADER 0x6c766c00
 
-static const String level_path = STR_BUFFER("res/level/");
-static const String level_format = STR_BUFFER(".level");
+const String EDITOR_FILE_PATH   = STR_BUFFER("res/editor/");
+const String EDITOR_FILE_FORMAT = STR_BUFFER(".editor");
 
 void editor_write(String name) {
     // Saves current editor level by the name provided.
-    char file_name[level_path.length + name.length + level_format.length + 1];
-    str_copy_to(level_path, file_name);
-    str_copy_to(name, file_name + level_path.length);
-    str_copy_to(level_format, file_name + level_path.length + name.length);
-    file_name[level_path.length + name.length + level_format.length] = '\0';
+    char file_name[EDITOR_FILE_PATH.length + name.length + EDITOR_FILE_FORMAT.length + 1];
+    str_copy_to(EDITOR_FILE_PATH, file_name);
+    str_copy_to(name, file_name + EDITOR_FILE_PATH.length);
+    str_copy_to(EDITOR_FILE_FORMAT, file_name + EDITOR_FILE_PATH.length + name.length);
+    file_name[EDITOR_FILE_PATH.length + name.length + EDITOR_FILE_FORMAT.length] = '\0';
 
     FILE *file = fopen(file_name, "wb");
     if (file == NULL) {
-        console_log("Couldn't open the level file for writing '%s'.\n", file_name);
+        console_log("Couldn't open the editor file for writing '%s'.\n", file_name);
         return;
     }
 
     u64 written = 0; 
     
-    written += fwrite_u32(EDITOR_LEVEL_FORMAT_HEADER, file) * 4;
+    written += fwrite_u32(EDITOR_FORMAT_HEADER, file) * 4;
 
     // Serializing each edge information.
     written += fwrite_u32(array_list_length(&edges_list), file) * 4;
@@ -1044,19 +1043,19 @@ void editor_write(String name) {
 
     fclose(file);
 
-    console_log("Written %llu bytes to level file '%s'.\n", written, file_name);
+    console_log("Written %llu bytes to editor file '%s'.\n", written, file_name);
 }
 
 void editor_read(String name) {
-    char file_name[level_path.length + name.length + level_format.length + 1];
-    str_copy_to(level_path, file_name);
-    str_copy_to(name, file_name + level_path.length);
-    str_copy_to(level_format, file_name + level_path.length + name.length);
-    file_name[level_path.length + name.length + level_format.length] = '\0';
+    char file_name[EDITOR_FILE_PATH.length + name.length + EDITOR_FILE_FORMAT.length + 1];
+    str_copy_to(EDITOR_FILE_PATH, file_name);
+    str_copy_to(name, file_name + EDITOR_FILE_PATH.length);
+    str_copy_to(EDITOR_FILE_FORMAT, file_name + EDITOR_FILE_PATH.length + name.length);
+    file_name[EDITOR_FILE_PATH.length + name.length + EDITOR_FILE_FORMAT.length] = '\0';
 
     FILE *file = fopen(file_name, "rb");
     if (file == NULL) {
-        console_log("Couldn't open the level file for reading '%s'.\n", file_name);
+        console_log("Couldn't open the editor file for reading '%s'.\n", file_name);
         return;
     }
 
@@ -1083,8 +1082,8 @@ void editor_read(String name) {
 
     u8 *ptr = buffer;
 
-    if (read_u32(&ptr) != EDITOR_LEVEL_FORMAT_HEADER) {
-        console_log("Failure reading the level file '%s', format header doesn't match.\n", file_name);
+    if (read_u32(&ptr) != EDITOR_FORMAT_HEADER) {
+        console_log("Failure reading the editor file '%s', format header doesn't match.\n", file_name);
         free(buffer);
         return;
     }
@@ -1107,6 +1106,96 @@ void editor_read(String name) {
     
     console_log("Read %llu bytes into the editor from '%s' level file.\n", ptr - buffer, file_name);
 }
+
+
+void editor_build(String name) {
+    // Saves current editor level by the name provided.
+    char file_name[LEVEL_FILE_PATH.length + name.length + LEVEL_FILE_FORMAT.length + 1];
+    str_copy_to(LEVEL_FILE_PATH, file_name);
+    str_copy_to(name, file_name + LEVEL_FILE_PATH.length);
+    str_copy_to(LEVEL_FILE_FORMAT, file_name + LEVEL_FILE_PATH.length + name.length);
+    file_name[LEVEL_FILE_PATH.length + name.length + LEVEL_FILE_FORMAT.length] = '\0';
+
+    FILE *file = fopen(file_name, "wb");
+    if (file == NULL) {
+        console_log("Couldn't open the level file for building '%s'.\n", file_name);
+        return;
+    }
+
+    u64 written = 0; 
+    
+    written += fwrite_u32(LEVEL_FORMAT_HEADER, file) * 4;
+
+    // Serializing each edge information.
+    written += fwrite_u32(array_list_length(&edges_list), file) * 4;
+    
+
+    // @Important: The reason why there are two loops, is only because the first one tells the length of the polygon being serialized and the other serializes the edges themselves.
+    Vec2f normal, v0, v1;
+    u32 j, polygon_edge_count;
+    for (u32 i = 0; i < array_list_length(&edges_list); i++) {  
+        if (edges_list[i].flags & EDITOR_EDGE_BUILT) {
+            continue;
+        }
+
+
+        j = i;
+        polygon_edge_count = 0;
+        while (true) {
+            polygon_edge_count++;
+
+            if (edges_list[j].next_index == EDITOR_INVALID_INDEX) {
+                console_log("Couldn't finish polygon building, disconnected edge sequence encountered.\n");
+                break;
+            }
+
+            j = edges_list[j].next_index;
+
+            if (j == i) {
+                break;
+            }
+        }
+
+        written += fwrite_u32(polygon_edge_count, file) * 4;
+        j = i;
+        while(true) {
+            written += fwrite_float(edges_list[j].vertex.x, file) * 4;
+            written += fwrite_float(edges_list[j].vertex.y, file) * 4;
+
+            if (edges_list[j].next_index == EDITOR_INVALID_INDEX) {
+                written += fwrite_float(0.0f, file) * 4;
+                written += fwrite_float(0.0f, file) * 4;
+                break;
+            }
+
+            v0 = edges_list[j].vertex;
+            v1 = edges_list[edges_list[j].next_index].vertex;
+            normal = vec2f_normalize(vec2f_make( (-2 * edges_list[j].flipped_normal + 1) * (v1.y - v0.y), (2 * edges_list[j].flipped_normal - 1) * (v1.x - v0.x) ));
+
+            written += fwrite_float(normal.x, file) * 4;
+            written += fwrite_float(normal.y, file) * 4;
+            
+            edges_list[j].flags |= EDITOR_EDGE_BUILT;
+
+            j = edges_list[j].next_index;
+
+            if (j == i) {
+                break;
+            }
+        }
+    }
+
+    fclose(file);
+
+
+    for (u32 i = 0; i < array_list_length(&edges_list); i++) {  
+        edges_list[i].flags &= ~EDITOR_EDGE_BUILT;
+    }
+
+    console_log("Written %llu bytes to level file '%s'.\n", written, file_name);
+}
+
+
 
 void editor_add_quad() {
     u32 index = array_list_length(&edges_list);
