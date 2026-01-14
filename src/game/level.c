@@ -19,6 +19,7 @@ static Font_Baked font_small;
 static Font_Baked font_medium;
 static Arena arena;
 static String info_buffer;
+static Entity **entities_free_addresses;
 static Entity *entities_allocation;
 static Phys_Edge *edges_allocation;
 static Phys_Polygon *polygon_list;
@@ -58,11 +59,15 @@ void level_manager_init(State *s) {
     info_buffer.data   = arena_alloc(&arena, 256);
     info_buffer.length = 256;
 
-    entities_allocation = calloc(MAX_ENTITIES, sizeof(Entity));
+    // Setting up entities stuff.
+    entities_allocation = malloc(MAX_ENTITIES * sizeof(Entity));
+    entities_free_addresses = array_list_make(Entity *, 8, &std_allocator);
+
     edges_allocation = NULL;
     polygon_list = array_list_make(Phys_Polygon, 8, &std_allocator);
 
-    state->level.flags = 0;
+    // All values in global state are defaulted to 0.
+    // state->level.flags = 0;
 }
 
 
@@ -154,15 +159,19 @@ void level_load(String name) {
 
 
     state->level.name = name;
+
+    memset(entities_allocation, 0, sizeof(Entity) * MAX_ENTITIES);
+    array_list_clear(&entities_free_addresses);
     state->level.entities_count = 0;
     state->level.entities = entities_allocation;
+
     state->level.phys_polygons_count = array_list_length(&polygon_list);
     state->level.phys_polygons = polygon_list;
     state->level.flags |= LEVEL_LOADED;
     
 
     // Player
-    player = state->level.entities + level_add_entity((Entity) { 
+    player = level_add_entity((Entity) { 
             .phys_box = phys_box_make(vec2f_make(-1.0f, 0.7f), 0.8f, 1.4f, 0.0f, 65.0f, 0.0f, 0.7f, 0.4f, true, false, false, true),
             .type = PLAYER, 
             .player = (Player) { .color = VEC4F_YELLOW, }, 
@@ -409,23 +418,36 @@ void level_draw() {
 }
 
 
-s64 level_add_entity(Entity entity) {
+Entity *level_add_entity(Entity entity) {
     if (state->level.entities_count >= MAX_ENTITIES) {
-        return -1;
+        return NULL;
     }
 
-    state->level.entities[state->level.entities_count] = entity;
-    return state->level.entities_count++;
+    state->level.entities_count++;
+
+    if (array_list_length(&entities_free_addresses) > 0) {
+        Entity *free_ptr = entities_free_addresses[0];
+        *free_ptr = entity;
+        array_list_unordered_remove(&entities_free_addresses, 0);
+        return free_ptr;
+    }
+
+
+    state->level.entities[state->level.entities_count - 1] = entity;
+    return state->level.entities + (state->level.entities_count - 1);
 }
 
-Entity level_remove_entity(s64 index) {
-    if (index >= state->level.entities_count) {
-        return (Entity) {0};
+void level_remove_entity(Entity *entity) {
+    if (entity >= state->level.entities + MAX_ENTITIES || entity < state->level.entities) {
+        console_log("Attempted remove of entity at invalid address.\n");
+        return;
     }
 
-    Entity removed = state->level.entities[index];
+    if (entity->type == NONE) {
+        console_log("Attempted remove entity of type NONE.\n");
+        return;
+    }
 
-    state->level.entities[index] = state->level.entities[--state->level.entities_count];
-    
-    return removed;
+    *entity = ((Entity) {0});
+    array_list_append(&entities_free_addresses, entity);
 }

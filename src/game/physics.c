@@ -850,6 +850,9 @@ void phys_update(Phys_Box *phys_boxes, s64 count, s64 stride) {
             // box1 = phys_boxes[i];
             box1 = (Phys_Box *)((char *)(phys_boxes) + i * stride);
 
+            if (!box1->active) {
+                continue;
+            }
 
             if (!box1->dynamic) {
                 continue;
@@ -883,6 +886,11 @@ void phys_update(Phys_Box *phys_boxes, s64 count, s64 stride) {
         // Collision.
         for (u32 i = 0; i < count; i++) {
             box1 = (Phys_Box *)((char *)(phys_boxes) + i * stride);
+
+            if (!box1->active) {
+                continue;
+            }
+
             for (u32 j = i + 1; j < count; j++) {
                 box2 = (Phys_Box *)((char *)(phys_boxes) + j * stride);
                 if (phys_sat_check_collision_obb(&box1->bound_box, &box2->bound_box)) { // @Speed: Need separate broad phase.
@@ -945,6 +953,8 @@ void phys_update(Phys_Box *phys_boxes, s64 count, s64 stride) {
                 }
             }
         }
+
+
     }
 }
 

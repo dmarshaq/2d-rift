@@ -61,6 +61,7 @@ typedef struct phys_box {
     bool destructible;
     bool gravitable;
     bool grounded;
+    bool active;
 } Phys_Box;
 
 
@@ -91,6 +92,7 @@ static Vec2f phys_polygon_center(Phys_Polygon *polygon) {
     return center;
 }
 
+#define PHYS_INACTIVE_BOX ((Phys_Box) {0})
 
 
 static Phys_Box phys_box_make(Vec2f position, float width, float height, float rotation, float mass, float restitution, float static_friction, float dynamic_friction, bool dynamic, bool rotatable, bool destructible, bool gravitable) {
@@ -101,6 +103,7 @@ static Phys_Box phys_box_make(Vec2f position, float width, float height, float r
     phys_box.rotatable      = rotatable;
     phys_box.destructible   = destructible;
     phys_box.gravitable     = gravitable;
+    phys_box.active         = true;
 
     return phys_box;
 }

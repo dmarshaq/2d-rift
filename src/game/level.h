@@ -81,6 +81,12 @@ typedef struct level {
 
     Level_Flags flags;
 
+    /**
+     * For right entities are guranteed to stay at the same memory address throughout it's lifetime.
+     * For simplicity there is not solution to ABA problems, because there are no places where such problems occur.
+     * After entity is deleted it's address might be used by another newly added entity.
+     * When behaviour of the game will get more complex and will require another entity system then it will be implemented but right now even though it sets ups potential bugs in the future it is not the main issue being solved.
+     */
     s64 entities_count;
     Entity *entities;
 
@@ -113,17 +119,16 @@ void level_draw();
 
 /**
  * Adds specified entity to the array of entities.
- * Returns index of added element in the array.
- * Returns -1 if there is not enough space.
+ * Returns pointer to the added element in the array.
+ * Returns NULL if there is not enough space.
  */
-s64 level_add_entity(Entity entity);
+Entity *level_add_entity(Entity entity);
 
 /**
- * Unorderly removes specified entity by its index from the array of entities.
- * Returns the removed entity.
- * Returns entity NONE if nothing was removed, or removed entity is of type NONE.
+ * Removes specified entity by pointer from the array of entities.
+ * @Important: Removed entity address might be used by another newly added entity, so don't use pointer to the entity that has been deleted.
  */
-Entity level_remove_entity(s64 index);
+void level_remove_entity(Entity *entity);
 
 
 

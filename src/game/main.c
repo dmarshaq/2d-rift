@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
 
 
     // Allocate global state.
-    state = allocator_alloc(&std_allocator, sizeof(State));
+    state = allocator_zero_alloc(&std_allocator, sizeof(State));
     
     state->t.delta_time_multi = 1.0f;
     state->t.time_slow_factor = 1;
