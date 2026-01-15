@@ -113,6 +113,7 @@ static Phys_Box phys_box_make(Vec2f position, float width, float height, float r
  */
 void phys_apply_force(Body_2D *body, Vec2f force);
 
+
 /**
  * Applies instanteneous acceleration to rigid body.
  */
@@ -133,5 +134,17 @@ void phys_update(Phys_Box *phys_boxes, s64 count, s64 stride);
  */
 bool phys_sat_check_collision_obb(OBB *obb1, OBB *obb2);
 
+/**
+ * Perfoms raycast check against a segment from a to b.
+ * If raycast hits segment, returns true and changes values hit and distance.
+ * If there is not intersection between raycast and segment, doesn't change values and returns false.
+ * @Important: distance value works also as input to limit how far a raycast can reach, if raycast is infinite make sure to default it to FLT_MAX.
+ */
+bool phys_ray_cast(Vec2f origin, Vec2f direction, Vec2f a, Vec2f b, Vec2f *hit, float *distance, Vec2f *normal);
+
+/**
+ * Perfoms raycast aginst specific obb, works exactly the same as 'phys_ray_cast'.
+ */
+bool phys_ray_cast_obb(Vec2f origin, Vec2f direction, OBB *obb, Vec2f *hit, float *distance, Vec2f *normal);
 
 #endif

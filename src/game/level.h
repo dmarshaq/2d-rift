@@ -22,35 +22,60 @@ typedef struct state State;
 extern const String LEVEL_FILE_PATH;
 extern const String LEVEL_FILE_FORMAT;
 
+
 /**
  * Boilerplate for adding new entities.
  * Add new entities here.
  */
-typedef struct prop_physics {
-    Vec4f color;
-} Prop_Physics;
-
-typedef struct prop_static {
-    Vec4f color;
-} Prop_Static;
+typedef struct entity Entity;
 
 typedef struct player {
     Vec4f color;
 } Player;
 
-typedef struct trigger {
-    String name;
-    OBB bound_box;
-} Trigger;
+typedef struct prop_physics {
+    Vec4f color;
+} Prop_Physics;
+
+#define LEVEL_RAY_EMITTER_CUT_OFF_DISTANCE 100.0f
+
+typedef struct ray_emitter {
+    Vec2f *ray_points_list;
+} Ray_Emitter;
+
+typedef struct ray_harvester {
+    
+} Ray_Harvester;
+
+typedef struct mirror {
+    
+} Mirror;
+
+typedef struct movable {
+    Entity *entity;
+} Movable;
+
+typedef struct rotatable {
+    Entity *entity;
+} Rotatable;
+
+typedef struct glass {
+
+} Glass;
+
 
 
 
 typedef enum entity_type : u8 {
     NONE          = 0x0,
-    PROP_PHYSICS,
-    PROP_STATIC,
     PLAYER,
-    TRIGGER,
+    PROP_PHYSICS,
+    RAY_EMITTER,
+    RAY_HARVESTER,
+    MIRROR,
+    MOVABLE,
+    ROTATABLE,
+    GLASS,
 } Entity_Type;
 
 /**
@@ -59,16 +84,20 @@ typedef enum entity_type : u8 {
  * because everything is an Entity.
  * @Important: If entity type is NONE it means it is not used in any away, basically, it doesn't exist and can be replaced any time soon with just spawned entity.
  */
-typedef struct entity {
+struct entity {
     Entity_Type type;
     Phys_Box phys_box;
     union {
-        Prop_Physics    prop_physics;
-        Prop_Static     prop_static;
         Player          player;
-        Trigger         trigger;
+        Prop_Physics    prop_physics;
+        Ray_Emitter     ray_emitter;
+        Ray_Harvester   ray_harvester;
+        Mirror          mirror;
+        Movable         movable;
+        Rotatable       rotatable;
+        Glass           glass;
     };
-} Entity;
+};
 
 
 typedef enum level_flags : u8 {

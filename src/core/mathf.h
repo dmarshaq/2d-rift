@@ -312,8 +312,8 @@ typedef struct oriented_bounding_box {
 
 #define obb_make(center, width, height, rotation)                       ((OBB) { center, vec2f_make(width, height), rotation })
 
-#define obb_p0(obb_ptr)                                                 vec2f_sum((obb_ptr)->center, vec2f_rotate(vec2f_make((obb_ptr)->dimensions.x / 2, (obb_ptr)->dimensions.y / 2), (obb_ptr)->rot))
-#define obb_p1(obb_ptr)                                                 vec2f_sum((obb_ptr)->center, vec2f_rotate(vec2f_make(-(obb_ptr)->dimensions.x / 2, -(obb_ptr)->dimensions.y / 2), (obb_ptr)->rot))
+#define obb_p0(obb_ptr)                                                 vec2f_sum((obb_ptr)->center, vec2f_rotate(vec2f_make(-(obb_ptr)->dimensions.x / 2, -(obb_ptr)->dimensions.y / 2), (obb_ptr)->rot))
+#define obb_p1(obb_ptr)                                                 vec2f_sum((obb_ptr)->center, vec2f_rotate(vec2f_make((obb_ptr)->dimensions.x / 2, (obb_ptr)->dimensions.y / 2), (obb_ptr)->rot))
 #define obb_p2(obb_ptr)                                                 vec2f_sum((obb_ptr)->center, vec2f_rotate(vec2f_make((obb_ptr)->dimensions.x / 2, -(obb_ptr)->dimensions.y / 2), (obb_ptr)->rot))
 #define obb_p3(obb_ptr)                                                 vec2f_sum((obb_ptr)->center, vec2f_rotate(vec2f_make(-(obb_ptr)->dimensions.x / 2, (obb_ptr)->dimensions.y / 2), (obb_ptr)->rot))
 

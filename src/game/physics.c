@@ -892,7 +892,14 @@ void phys_update(Phys_Box *phys_boxes, s64 count, s64 stride) {
             }
 
             for (u32 j = i + 1; j < count; j++) {
+
                 box2 = (Phys_Box *)((char *)(phys_boxes) + j * stride);
+
+                // If two boxes are static ignore.
+                if (!box1->dynamic && !box2->dynamic) {
+                    continue;
+                }
+
                 if (phys_sat_check_collision_obb(&box1->bound_box, &box2->bound_box)) { // @Speed: Need separate broad phase.
                     
                     // Fidning depth and normal of collision.
@@ -930,26 +937,28 @@ void phys_update(Phys_Box *phys_boxes, s64 count, s64 stride) {
 
             s64 polygons_count = *phys_polygons_count_ptr;
             Phys_Polygon *polygons = *phys_polygons_ptr;
-            for (s64 i = 0; i < polygons_count; i++) {
-                if (phys_sat_check_collision_obb_polygon(&box1->bound_box, polygons + i)) {
+            if (box1->dynamic) {
+                for (s64 i = 0; i < polygons_count; i++) {
+                    if (phys_sat_check_collision_obb_polygon(&box1->bound_box, polygons + i)) {
 
-                    // Fidning depth and normal of collision.
-                    phys_sat_find_min_depth_normal_obb_polygon(&box1->bound_box, polygons + i, &depth, &normal);
+                        // Fidning depth and normal of collision.
+                        phys_sat_find_min_depth_normal_obb_polygon(&box1->bound_box, polygons + i, &depth, &normal);
 
-                    // Calculating dot product to check if any objects are grounded.
-                    float grounded_dot = vec2f_dot(vec2f_normalize(GRAVITY_ACCELERATION), normal);
+                        // Calculating dot product to check if any objects are grounded.
+                        float grounded_dot = vec2f_dot(vec2f_normalize(GRAVITY_ACCELERATION), normal);
 
 
-                    phys_resolve_static_obb_collision(&box1->bound_box, depth, vec2f_negate(normal));
+                        phys_resolve_static_obb_collision(&box1->bound_box, depth, vec2f_negate(normal));
 
-                    if (grounded_dot > 0.7f)
-                        box1->grounded = true;
+                        if (grounded_dot > 0.7f)
+                            box1->grounded = true;
 
-                    box1->body.mass_center = box1->bound_box.center;
+                        box1->body.mass_center = box1->bound_box.center;
 
-                    // Detailed physics collision response resolution happens here.
-                    contacts_count = phys_find_contanct_points_obb_polygon(&box1->bound_box, polygons + i, contacts);
-                    phys_resolve_phys_box_polygon_collision_with_rotation_friction(box1, polygons + i, normal, contacts, contacts_count);
+                        // Detailed physics collision response resolution happens here.
+                        contacts_count = phys_find_contanct_points_obb_polygon(&box1->bound_box, polygons + i, contacts);
+                        phys_resolve_phys_box_polygon_collision_with_rotation_friction(box1, polygons + i, normal, contacts, contacts_count);
+                    }
                 }
             }
         }
@@ -958,5 +967,48 @@ void phys_update(Phys_Box *phys_boxes, s64 count, s64 stride) {
     }
 }
 
+#define EPS 1e-5
+
+bool phys_ray_cast(Vec2f origin, Vec2f direction, Vec2f a, Vec2f b, Vec2f *hit, float *distance, Vec2f *normal) {
+    Vec2f segment_dir = vec2f_normalize(vec2f_difference(b, a));
+    Vec2f relative_origin = vec2f_difference(origin, a);
+
+    Vec2f origin_projection = vec2f_difference(vec2f_multi_constant(segment_dir, vec2f_dot(segment_dir, relative_origin)), relative_origin);
+
+    Vec2f origin_projection_normalized = vec2f_normalize(origin_projection);
+
+    float d = vec2f_magnitude(origin_projection) / vec2f_dot(origin_projection_normalized, direction);
+
+    if (d < EPS || d > *distance) {
+        return false;
+    }
+
+    Vec2f h = vec2f_sum(origin, vec2f_multi_constant(direction, d));
+    
+    if (h.x > fmaxf(a.x, b.x) + EPS || h.x < fminf(a.x, b.x) - EPS) {
+        return false;
+    }
+
+    if (h.y > fmaxf(a.y, b.y) + EPS || h.y < fminf(a.y, b.y) - EPS) {
+        return false;
+    }
+
+    *distance = d;
+    *hit = h;
+    *normal = vec2f_negate(origin_projection_normalized);
+
+    return true;
+}
+
+bool phys_ray_cast_obb(Vec2f origin, Vec2f direction, OBB *obb, Vec2f *hit, float *distance, Vec2f *normal) {
+    bool result = false;
+
+    result = phys_ray_cast(origin, direction, obb_p0(obb), obb_p2(obb), hit, distance, normal) || result;
+    result = phys_ray_cast(origin, direction, obb_p2(obb), obb_p1(obb), hit, distance, normal) || result;
+    result = phys_ray_cast(origin, direction, obb_p3(obb), obb_p1(obb), hit, distance, normal) || result;
+    result = phys_ray_cast(origin, direction, obb_p0(obb), obb_p3(obb), hit, distance, normal) || result;
+
+    return result;
+}
 
 

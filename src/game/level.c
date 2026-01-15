@@ -1,10 +1,13 @@
 #include "game/level.h"
 
+#include "meta_generated.h"
+
 #include "game/game.h"
 #include "game/draw.h"
 #include "game/graphics.h"
 #include "game/console.h"
 #include "game/physics.h"
+#include "game/vars.h"
 
 #include "core/mathf.h"
 #include "core/structs.h"
@@ -35,9 +38,24 @@ static State *state;
 
 
 
+@Introspect;
+typedef struct level_params {
+    float camera_zoom;
+} Level_Params;
+
+static Level_Params level_params;
+
 
 
 void level_manager_init(State *s) {
+    // Tweak vars default values.
+    level_params.camera_zoom = 1.0f;
+    
+    vars_tree_add(TYPE_OF(level_params), (u8 *)&level_params, CSTR("level_params"));
+
+    
+    // Intializing other stuff.
+
     state = s;
     //
     // @Copypasta: From editor.c, from console.c ...
@@ -168,6 +186,7 @@ void level_load(String name) {
     state->level.phys_polygons_count = array_list_length(&polygon_list);
     state->level.phys_polygons = polygon_list;
     state->level.flags |= LEVEL_LOADED;
+
     
 
     // Player
@@ -177,89 +196,44 @@ void level_load(String name) {
             .player = (Player) { .color = VEC4F_YELLOW, }, 
             });
 
+    // Laser emitter.
+    level_add_entity((Entity) {
+            .phys_box = phys_box_make(vec2f_make(-4.0f, -4.5f), 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+            .type = RAY_EMITTER, 
+            .ray_emitter = { .ray_points_list = array_list_make(Vec2f, 4, &std_allocator) }, 
+            });
+    
+    // Laser harvester.
+    
+
+    // Mirror.
+    level_add_entity((Entity) {
+            .phys_box = phys_box_make(vec2f_make(4.0f, 4.5f), 0.4f, 3.0f, PI / 4, 0.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+            .type = MIRROR, 
+            .mirror = { 0 }, 
+            });
+
+    level_add_entity((Entity) {
+            .phys_box = phys_box_make(vec2f_make(4.0f, -4.5f), 0.4f, 3.0f, -PI / 4, 0.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+            .type = MIRROR, 
+            .mirror = { 0 }, 
+            });
+
 
     // Physics objects
     level_add_entity((Entity) {
             .phys_box = phys_box_make(vec2f_make(1.0f, 1.0f), 1.0f, 1.0f, 0.0f, 55.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, true, true, false, true),
             .type = PROP_PHYSICS, 
-            .prop_physics = (Prop_Physics) { .color = VEC4F_CYAN, }, 
+            .prop_physics = (Prop_Physics) { .color = vec4f_make(0.0f,  0.60f,  0.75f,  1.0f), }, 
             });
 
-    level_add_entity((Entity) {
-            .phys_box = phys_box_make(vec2f_make(-1.0f, 1.0f), 0.5f, 1.4f, PI / 4.0f, 40.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, true, true, false, true),
-            .type = PROP_PHYSICS, 
-            .prop_physics = (Prop_Physics) { .color = VEC4F_CYAN, }, 
-            });
-
-
-    // Level blockout
     // level_add_entity((Entity) {
-    //         .phys_box = phys_box_make(vec2f_make(2.0f, -1.5f), 12.0f, 3.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-    //         .type = PROP_STATIC, 
-    //         .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
-    //         });
-
-    // level_add_entity((Entity) {
-    //         .phys_box = phys_box_make(vec2f_make(-8.0f, -3.0f), 8.0f, 12.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-    //         .type = PROP_STATIC, 
-    //         .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
-    //         });
-
-    // level_add_entity((Entity) {
-    //         .phys_box = phys_box_make(vec2f_make(-9.5f, 7.0f), 5.0f, 8.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-    //         .type = PROP_STATIC, 
-    //         .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
-    //         });
-
-    // level_add_entity((Entity) {
-    //         .phys_box = phys_box_make(vec2f_make(2.5f, -6.0f), 13.0f, 6.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-    //         .type = PROP_STATIC, 
-    //         .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
-    //         });
-
-    // level_add_entity((Entity) {
-    //         .phys_box = phys_box_make(vec2f_make(13.5f, 0.5f), 3.0f, 1.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-    //         .type = PROP_STATIC, 
-    //         .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
-    //         });
-
-    // level_add_entity((Entity) {
-    //         .phys_box = phys_box_make(vec2f_make(20.0f, -6.0f), 12.0f, 6.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-    //         .type = PROP_STATIC, 
-    //         .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
-    //         });
-
-    // level_add_entity((Entity) {
-    //         .phys_box = phys_box_make(vec2f_make(21.5f, -2.0f), 9.0f, 2.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-    //         .type = PROP_STATIC, 
-    //         .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
-    //         });
-
-    // level_add_entity((Entity) {
-    //         .phys_box = phys_box_make(vec2f_make(23.0f, 1.0f), 6.0f, 4.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-    //         .type = PROP_STATIC, 
-    //         .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
-    //         });
-
-    // level_add_entity((Entity) {
-    //         .phys_box = phys_box_make(vec2f_make(19.5f, 2.5f), 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, GEOMETRY_STATIC_FRICTION, GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-    //         .type = PROP_STATIC, 
-    //         .prop_static = (Prop_Static) { .color = VEC4F_GREY, }, 
+    //         .phys_box = phys_box_make(vec2f_make(-1.0f, 1.0f), 0.5f, 1.4f, PI / 4.0f, 40.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, true, true, false, true),
+    //         .type = PROP_PHYSICS, 
+    //         .prop_physics = (Prop_Physics) { .color = VEC4F_CYAN, }, 
     //         });
 
 
-    // // Triggers, in future make triggers send events, it is usefull for 1. in editor set up of logic, and in more organized game logic, that can be more controlled, especially if events can be delayed and so on...
-    // level_add_entity((Entity) {
-    //         .phys_box = (Phys_Box) {0},
-    //         .type = TRIGGER, 
-    //         .trigger = (Trigger) { .name = CSTR("finish"), .bound_box = obb_make(vec2f_make(24.0f, 5.0f), 2.0f, 4.0f, 0.0f)}, 
-    //         });
-
-    // level_add_entity((Entity) {
-    //         .phys_box = (Phys_Box) {0},
-    //         .type = TRIGGER, 
-    //         .trigger = (Trigger) { .name = CSTR("pit"), .bound_box = obb_make(vec2f_make(8.0f, -11.0f), 24.0f, 4.0f, 0.0f)}, 
-    //         });
 
 }
 
@@ -269,6 +243,9 @@ void level_update() {
     if (!(state->level.flags & LEVEL_LOADED)) {
         return;
     }
+
+    // Camera setting zoom.
+    state->main_camera.unit_scale = level_params.camera_zoom;
 
     // Player control stuff.
     if (!console_active()) {
@@ -305,25 +282,79 @@ void level_update() {
 
 
     // Simple super smooth camera movement.
-    state->main_camera.center = vec2f_lerp(state->main_camera.center, player->phys_box.bound_box.center, 0.8f * state->t.delta_time);
+    // state->main_camera.center = vec2f_lerp(state->main_camera.center, player->phys_box.bound_box.center, 0.8f * state->t.delta_time);
 
+    static float rotation = 0.0f;
+
+    rotation -= PI / 12 * state->t.delta_time;
+    if (rotation < -PI)
+        rotation = 0.0f;
 
     for (s64 i = 0; i < state->level.entities_count; i++) {
         switch(state->level.entities[i].type) {
-            case TRIGGER:
-                if (phys_sat_check_collision_obb(&state->level.entities[i].trigger.bound_box, &player->phys_box.bound_box)) {
-                    console_log("Trigger triggered.\n");
-                    if (str_equals(state->level.entities[i].trigger.name, CSTR("finish"))) {
-                        console_log("Level finished!\n");
-                        player->phys_box.bound_box.center = vec2f_make(-1.0f, 0.7f);
+            case RAY_EMITTER:
+                // state->level.entities[i].phys_box.bound_box.rot = - PI / 12;
+
+                Ray_Emitter *e = &state->level.entities[i].ray_emitter;
+                array_list_clear(&e->ray_points_list);
+
+                Vec2f v0 = obb_p1(&state->level.entities[i].phys_box.bound_box);
+                Vec2f v1 = obb_p2(&state->level.entities[i].phys_box.bound_box);
+
+                array_list_append(&e->ray_points_list, vec2f_make(v0.x + (v1.x - v0.x) / 2, v0.y + (v1.y - v0.y) / 2));
+                
+                Vec2f direction = obb_right(&state->level.entities[i].phys_box.bound_box);
+
+
+                Vec2f hit, normal;
+                float distance;
+                Entity *hit_entity;
+                
+                // Ray logic.
+                while (true) {
+                    distance = FLT_MAX;
+                    hit_entity = NULL;
+
+                    for (s64 j = 0; j < state->level.entities_count; j++) {
+                        switch(state->level.entities[j].type) {
+                            case PROP_PHYSICS:
+                                if (phys_ray_cast_obb(e->ray_points_list[array_list_length(&e->ray_points_list) - 1], direction, &state->level.entities[j].phys_box.bound_box, &hit, &distance, &normal)) {
+                                    hit_entity = state->level.entities + j;
+                                }
+                                break;
+                            case MIRROR:
+                                if (phys_ray_cast_obb(e->ray_points_list[array_list_length(&e->ray_points_list) - 1], direction, &state->level.entities[j].phys_box.bound_box, &hit, &distance, &normal)) {
+                                    hit_entity = state->level.entities + j;
+                                }
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+
+
+                    if (hit_entity == NULL) {
+                        hit = vec2f_sum(e->ray_points_list[array_list_length(&e->ray_points_list) - 1], vec2f_multi_constant(direction, LEVEL_RAY_EMITTER_CUT_OFF_DISTANCE));
+                        break;
+                    }
+
+                    if (hit_entity->type == MIRROR) {
+                        array_list_append(&e->ray_points_list, hit);
+                        direction = vec2f_negate(direction);
+                        Vec2f reflection_offset = vec2f_multi_constant(vec2f_difference(vec2f_multi_constant(normal, vec2f_dot(normal, direction)), direction), 2);
+                        direction = vec2f_sum(direction, reflection_offset);
+
+                        // Reset since now we cast again but from different point.
                         continue;
                     }
-                    if (str_equals(state->level.entities[i].trigger.name, CSTR("pit"))) {
-                        console_log("Player fell and died :(\n");
-                        player->phys_box.bound_box.center = vec2f_make(-1.0f, 0.7f);
-                        continue;
-                    }
+
+                    break;
                 }
+
+
+
+                array_list_append(&e->ray_points_list, hit);
+
                 break;
         }
     }
@@ -349,14 +380,14 @@ void level_draw() {
             case PLAYER:
                 draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = state->level.entities[i].player.color);
                 break;
-            case PROP_STATIC:
-                draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = state->level.entities[i].prop_static.color);
-                break;
             case PROP_PHYSICS:
                 draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = state->level.entities[i].prop_physics.color, .offset_angle = state->level.entities[i].phys_box.bound_box.rot);
                 break;
-            case TRIGGER:
-                draw_rect(obb_p0(&state->level.entities[i].trigger.bound_box), obb_p1(&state->level.entities[i].trigger.bound_box), .color = vec4f_make(0.6f, 0.3f, 0.3f, 0.2f));
+            case RAY_EMITTER:
+                draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = VEC4F_GREY, .offset_angle = state->level.entities[i].phys_box.bound_box.rot);
+                break;
+            case MIRROR:
+                draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = VEC4F_CYAN, .offset_angle = state->level.entities[i].phys_box.bound_box.rot);
                 break;
         }
     }
@@ -383,6 +414,17 @@ void level_draw() {
 
             draw_line(midpoint, vec2f_sum(midpoint, vec2f_multi_constant(polygon_list[i].edges[j].normal, 0.4f)), VEC4F_BLUE, NULL);
 
+        }
+    }
+
+    for (s64 i = 0; i < state->level.entities_count; i++) {
+        switch(state->level.entities[i].type) {
+            case RAY_EMITTER:
+                Ray_Emitter *e = &state->level.entities[i].ray_emitter;
+                for (u32 i = 0; i < array_list_length(&e->ray_points_list) - 1; i++) {
+                    draw_line(e->ray_points_list[i], e->ray_points_list[i + 1], VEC4F_RED, NULL);
+                }
+                break;
         }
     }
 
