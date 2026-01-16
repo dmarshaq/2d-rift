@@ -29,12 +29,18 @@ extern const String LEVEL_FILE_FORMAT;
  */
 typedef struct entity Entity;
 
+#define LEVEL_COLOR_PLAYER          ((Vec4f) {0.60f, 0.60f, 0.0f, 1.0f})
+#define LEVEL_COLOR_PROP_PHYSICS    ((Vec4f) {0.0f, 0.60f, 0.75f, 1.0f})
+#define LEVEL_COLOR_RAY_EMITTER     VEC4F_GREY
+#define LEVEL_COLOR_MIRROR          VEC4F_CYAN
+#define LEVEL_COLOR_GLASS           ((Vec4f) {0.0f, 0.8f, 0.8f, 0.4f})
+
 typedef struct player {
-    Vec4f color;
+
 } Player;
 
 typedef struct prop_physics {
-    Vec4f color;
+
 } Prop_Physics;
 
 #define LEVEL_RAY_EMITTER_CUT_OFF_DISTANCE 100.0f

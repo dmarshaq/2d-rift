@@ -977,7 +977,13 @@ bool phys_ray_cast(Vec2f origin, Vec2f direction, Vec2f a, Vec2f b, Vec2f *hit, 
 
     Vec2f origin_projection_normalized = vec2f_normalize(origin_projection);
 
-    float d = vec2f_magnitude(origin_projection) / vec2f_dot(origin_projection_normalized, direction);
+    float dot = vec2f_dot(origin_projection_normalized, direction);
+
+    if (fequal(dot, 0.0f)) {
+        return false;
+    }
+
+    float d = vec2f_magnitude(origin_projection) / dot;
 
     if (d < EPS || d > *distance) {
         return false;

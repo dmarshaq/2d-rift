@@ -44,11 +44,10 @@ void editor_read(String name);
 @RegisterCommand;
 void editor_build(String name);
 
-@Introspect;
-@RegisterCommand;
-void editor_add_quad();
+void editor_add_quad(Vec2f position);
 
 
-void editor_add_quad_at(Vec2f position);
+
+void editor_add_entity(Vec2f position, u8 type);
 
 #endif

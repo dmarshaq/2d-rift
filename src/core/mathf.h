@@ -131,6 +131,10 @@ static inline Vec2f vec2f_rotate(Vec2f v, float angle) {
     );
 }
 
+static inline Vec2f vec2f_midpoint(Vec2f a, Vec2f b) {
+    return vec2f_make(a.x + (b.x - a.x) * 0.5f, a.y + (b.y - a.y) * 0.5f);
+}
+
 float point_segment_min_distance(Vec2f p, Vec2f a, Vec2f b);
 
 // Vec3f

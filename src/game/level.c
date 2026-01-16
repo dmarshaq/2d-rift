@@ -97,6 +97,7 @@ void level_load(String name) {
     console_log("Loading '%.*s' level.\n", UNPACK(name));
 
     state->level = (Level) {0};
+    player = NULL; // Find a better way to reference player?
 
     char file_name[LEVEL_FILE_PATH.length + name.length + LEVEL_FILE_FORMAT.length + 1];
     str_copy_to(LEVEL_FILE_PATH, file_name);
@@ -153,21 +154,78 @@ void level_load(String name) {
 
     array_list_clear(&polygon_list);
 
-    // Reusing edge count variable.
-    edge_count = 0;
+    u32 edge_counter = 0;
     u32 polygon_edge_count;
-    while (ptr < buffer + size) {
+    while (edge_counter < edge_count) {
         polygon_edge_count = read_u32(&ptr);
         
-        array_list_append(&polygon_list, ((Phys_Polygon) { .edges_count = polygon_edge_count, .edges = edges_allocation + edge_count }));
+        array_list_append(&polygon_list, ((Phys_Polygon) { .edges_count = polygon_edge_count, .edges = edges_allocation + edge_counter }));
         for (u32 i = 0; i < polygon_edge_count; i++) {
-            (edges_allocation + edge_count + i)->vertex.x = read_float(&ptr);
-            (edges_allocation + edge_count + i)->vertex.y = read_float(&ptr);
-            (edges_allocation + edge_count + i)->normal.x = read_float(&ptr);
-            (edges_allocation + edge_count + i)->normal.y = read_float(&ptr);
+            (edges_allocation + edge_counter + i)->vertex.x = read_float(&ptr);
+            (edges_allocation + edge_counter + i)->vertex.y = read_float(&ptr);
+            (edges_allocation + edge_counter + i)->normal.x = read_float(&ptr);
+            (edges_allocation + edge_counter + i)->normal.y = read_float(&ptr);
         }
 
-        edge_count += polygon_edge_count;
+        edge_counter += polygon_edge_count;
+    }
+
+
+
+
+
+    u32 entity_count = read_u32(&ptr);
+
+    OBB obb;
+    Entity e;
+
+    memset(entities_allocation, 0, sizeof(Entity) * MAX_ENTITIES);
+    array_list_clear(&entities_free_addresses);
+    state->level.entities_count = 0;
+    state->level.entities = entities_allocation;
+
+    for (u32 i = 0; i < entity_count; i++) {
+
+        e.type = read_byte(&ptr);
+
+        obb.center.x = read_float(&ptr);
+        obb.center.y = read_float(&ptr);
+        obb.dimensions.x = read_float(&ptr);
+        obb.dimensions.y = read_float(&ptr);
+        obb.rot = read_float(&ptr);
+
+        switch(e.type) {
+            case PLAYER:
+                if (player != NULL) {
+                    break;
+                }
+                e.phys_box = phys_box_make(obb.center, obb.dimensions.x, obb.dimensions.y, 0.0f, 65.0f, 0.0f, 0.7f, 0.4f, true, false, false, true);
+                
+                player = level_add_entity(e);
+                break;
+            case PROP_PHYSICS:
+                e.phys_box = phys_box_make(obb.center, obb.dimensions.x, obb.dimensions.y, obb.rot, 55.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, true, true, false, true);
+
+                level_add_entity(e);
+                break;
+            case RAY_EMITTER:
+                e.ray_emitter.ray_points_list = array_list_make(Vec2f, 4, &std_allocator);
+                e.phys_box = phys_box_make(obb.center, obb.dimensions.x, obb.dimensions.y, obb.rot, 0.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, false, false, false, false);
+
+                level_add_entity(e);
+                break;
+            case MIRROR:
+                e.phys_box = phys_box_make(obb.center, obb.dimensions.x, obb.dimensions.y, obb.rot, 0.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, false, false, false, false);
+
+                level_add_entity(e);
+                break;
+            case GLASS:
+                e.phys_box = phys_box_make(obb.center, obb.dimensions.x, obb.dimensions.y, obb.rot, 0.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, false, false, false, false);
+
+                level_add_entity(e);
+                break;
+        }
+
     }
 
     free(buffer);
@@ -178,10 +236,6 @@ void level_load(String name) {
 
     state->level.name = name;
 
-    memset(entities_allocation, 0, sizeof(Entity) * MAX_ENTITIES);
-    array_list_clear(&entities_free_addresses);
-    state->level.entities_count = 0;
-    state->level.entities = entities_allocation;
 
     state->level.phys_polygons_count = array_list_length(&polygon_list);
     state->level.phys_polygons = polygon_list;
@@ -190,42 +244,42 @@ void level_load(String name) {
     
 
     // Player
-    player = level_add_entity((Entity) { 
-            .phys_box = phys_box_make(vec2f_make(-1.0f, 0.7f), 0.8f, 1.4f, 0.0f, 65.0f, 0.0f, 0.7f, 0.4f, true, false, false, true),
-            .type = PLAYER, 
-            .player = (Player) { .color = VEC4F_YELLOW, }, 
-            });
+    // player = level_add_entity((Entity) { 
+    //         .phys_box = phys_box_make(vec2f_make(-1.0f, 0.7f), 0.8f, 1.4f, 0.0f, 65.0f, 0.0f, 0.7f, 0.4f, true, false, false, true),
+    //         .type = PLAYER, 
+    //         .player = {}, 
+    //         });
 
-    // Laser emitter.
-    level_add_entity((Entity) {
-            .phys_box = phys_box_make(vec2f_make(-4.0f, -4.5f), 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-            .type = RAY_EMITTER, 
-            .ray_emitter = { .ray_points_list = array_list_make(Vec2f, 4, &std_allocator) }, 
-            });
-    
-    // Laser harvester.
-    
+    // // Laser emitter.
+    // level_add_entity((Entity) {
+    //         .phys_box = phys_box_make(vec2f_make(-4.0f, -4.5f), 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+    //         .type = RAY_EMITTER, 
+    //         .ray_emitter = { .ray_points_list = array_list_make(Vec2f, 4, &std_allocator) }, 
+    //         });
+    // 
+    // // Laser harvester.
+    // 
 
-    // Mirror.
-    level_add_entity((Entity) {
-            .phys_box = phys_box_make(vec2f_make(4.0f, 4.5f), 0.4f, 3.0f, PI / 4, 0.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-            .type = MIRROR, 
-            .mirror = { 0 }, 
-            });
+    // // Mirror.
+    // level_add_entity((Entity) {
+    //         .phys_box = phys_box_make(vec2f_make(4.0f, 4.5f), 0.4f, 3.0f, PI / 4, 0.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+    //         .type = MIRROR, 
+    //         .mirror = {}, 
+    //         });
 
-    level_add_entity((Entity) {
-            .phys_box = phys_box_make(vec2f_make(4.0f, -4.5f), 0.4f, 3.0f, -PI / 4, 0.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
-            .type = MIRROR, 
-            .mirror = { 0 }, 
-            });
+    // level_add_entity((Entity) {
+    //         .phys_box = phys_box_make(vec2f_make(4.0f, -4.5f), 0.4f, 3.0f, -PI / 4, 0.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, false, false, false, false),
+    //         .type = MIRROR, 
+    //         .mirror = {}, 
+    //         });
 
 
-    // Physics objects
-    level_add_entity((Entity) {
-            .phys_box = phys_box_make(vec2f_make(1.0f, 1.0f), 1.0f, 1.0f, 0.0f, 55.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, true, true, false, true),
-            .type = PROP_PHYSICS, 
-            .prop_physics = (Prop_Physics) { .color = vec4f_make(0.0f,  0.60f,  0.75f,  1.0f), }, 
-            });
+    // // Physics objects
+    // level_add_entity((Entity) {
+    //         .phys_box = phys_box_make(vec2f_make(1.0f, 1.0f), 1.0f, 1.0f, 0.0f, 55.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, true, true, false, true),
+    //         .type = PROP_PHYSICS, 
+    //         .prop_physics = {}, 
+    //         });
 
     // level_add_entity((Entity) {
     //         .phys_box = phys_box_make(vec2f_make(-1.0f, 1.0f), 0.5f, 1.4f, PI / 4.0f, 40.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, true, true, false, true),
@@ -282,7 +336,7 @@ void level_update() {
 
 
     // Simple super smooth camera movement.
-    // state->main_camera.center = vec2f_lerp(state->main_camera.center, player->phys_box.bound_box.center, 0.8f * state->t.delta_time);
+    state->main_camera.center = vec2f_lerp(state->main_camera.center, player->phys_box.bound_box.center, 0.9f * state->t.delta_time);
 
     static float rotation = 0.0f;
 
@@ -378,16 +432,19 @@ void level_draw() {
     for (s64 i = 0; i < state->level.entities_count; i++) {
         switch(state->level.entities[i].type) {
             case PLAYER:
-                draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = state->level.entities[i].player.color);
+                draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = LEVEL_COLOR_PLAYER);
                 break;
             case PROP_PHYSICS:
-                draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = state->level.entities[i].prop_physics.color, .offset_angle = state->level.entities[i].phys_box.bound_box.rot);
+                draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = LEVEL_COLOR_PROP_PHYSICS, .offset_angle = state->level.entities[i].phys_box.bound_box.rot);
                 break;
             case RAY_EMITTER:
-                draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = VEC4F_GREY, .offset_angle = state->level.entities[i].phys_box.bound_box.rot);
+                draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = LEVEL_COLOR_RAY_EMITTER, .offset_angle = state->level.entities[i].phys_box.bound_box.rot);
                 break;
             case MIRROR:
-                draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = VEC4F_CYAN, .offset_angle = state->level.entities[i].phys_box.bound_box.rot);
+                draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = LEVEL_COLOR_MIRROR, .offset_angle = state->level.entities[i].phys_box.bound_box.rot);
+                break;
+            case GLASS:
+                draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = LEVEL_COLOR_GLASS, .offset_angle = state->level.entities[i].phys_box.bound_box.rot);
                 break;
         }
     }

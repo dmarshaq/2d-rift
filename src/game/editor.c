@@ -6,6 +6,7 @@
 #include "game/draw.h"
 #include "game/graphics.h"
 #include "game/console.h"
+#include "game/level.h"
 
 #include "core/mathf.h"
 #include "core/structs.h"
@@ -19,21 +20,12 @@
 typedef enum editor_state : u8 {
     EDITOR_STATE_SELECT,
     EDITOR_STATE_CUT,
+    EDITOR_STATE_ROTATE,
 } Editor_State;
 
 static Editor_State editor_state;
 
 
-// @Deprecated.
-// static const u8 EDITOR_QUAD_BITMASK_ANY_POINT_SELECTED = EDITOR_QUAD_FLAG_P0_SELECTED | EDITOR_QUAD_FLAG_P1_SELECTED | EDITOR_QUAD_FLAG_P2_SELECTED | EDITOR_QUAD_FLAG_P3_SELECTED;
-
-
-// @Deprecated.
-//typedef struct editor_quad {
-//    Editor_Quad_Flags flags;
-//    Quad quad;
-//    Vec4f color;
-//} Editor_Quad;
 
 
 typedef enum editor_edge_flags : u8 {
@@ -49,6 +41,18 @@ typedef struct editor_edge {
     bool flipped_normal;
     Editor_Edge_Flags flags;
 } Editor_Edge;
+
+
+typedef enum editor_entity_flags : u8 {
+    EDITOR_ENTITY_SELECTED      = 0x01,
+    EDITOR_ENTITY_REMOVED       = 0x02,
+} Editor_Entity_Flags;
+
+typedef struct editor_entity {
+    Entity_Type type;
+    OBB bound_box;
+    Editor_Entity_Flags flags;
+} Editor_Entity;
 
 
 
@@ -75,12 +79,15 @@ static Editor_Params editor_params;
 
 
 
-// @Deprecated.
-// static Editor_Quad *quads_list;
 
 static Editor_Edge *edges_list;
 static u32 *edges_deleted_indicies_list;
+
+static Editor_Entity *entity_list;
+
 static const u32 EDITOR_INVALID_INDEX = 0xffffffff;
+
+
 
 
 
@@ -92,7 +99,7 @@ static Vec2f world_mouse_left_click_origin;
 static Vec2f world_mouse_right_click_origin;
 static Vec2f world_mouse_snapped_left_click_origin;
 static Vec2f world_mouse_snapped_right_click_origin;
-static u32   selection_move_anchor_vertex_index;
+static Vec2f selection_move_anchor_vector;
 static Vec2f selection_move_offset;
 static float grid_scale;
 
@@ -132,6 +139,7 @@ typedef enum editor_selected_type : u8 {
     EDITOR_NONE,
     EDITOR_EDGE,
     EDITOR_VERTEX,
+    EDITOR_ENTITY,
 } Editor_Selected_Type;
 
 
@@ -140,8 +148,8 @@ typedef struct editor_selected {
     Editor_Selected_Type type;
 
     union {
-        // Editor_Quad *quad; // @Deprecated.
         u32 edge_index;
+        u32 entity_index;
     };
 } Editor_Selected;
 
@@ -159,6 +167,10 @@ static Vec2f editor_ui_mouse_menu_origin;
 
 static u32 cut_selected_edge_index;
 static Vec2f cut_position;
+
+static Vec2f rotate_origin_vector;
+static Vec2f rotate_anchor;
+static float rotate_rad_offset;
 
 
 
@@ -224,12 +236,14 @@ void editor_init(State *state) {
     world_mouse_right_click_origin = VEC2F_ORIGIN;
     world_mouse_snapped_left_click_origin = VEC2F_ORIGIN;
     world_mouse_snapped_right_click_origin = VEC2F_ORIGIN;
-    selection_move_anchor_vertex_index = EDITOR_INVALID_INDEX;
+    selection_move_anchor_vector = VEC2F_ORIGIN;
     selection_move_offset = VEC2F_ORIGIN;
     editor_ui_mouse_menu_toggle = false;
     editor_ui_mouse_menu_origin = VEC2F_ORIGIN;
     cut_selected_edge_index = EDITOR_INVALID_INDEX;
     cut_position = VEC2F_ORIGIN;
+    rotate_origin_vector = VEC2F_ORIGIN;
+    rotate_anchor = VEC2F_ORIGIN;
     grid_scale = 1.0f;
 
     // Setting pointers to global state.
@@ -246,8 +260,11 @@ void editor_init(State *state) {
 
     edges_list = array_list_make(Editor_Edge, 8, &std_allocator);
     edges_deleted_indicies_list = array_list_make(u32, 8, &std_allocator);
-    editor_selected_list = array_list_make(Editor_Selected, 8, &std_allocator);
 
+    entity_list = array_list_make(Editor_Entity, 8, &std_allocator);
+
+    editor_selected_list = array_list_make(Editor_Selected, 8, &std_allocator);
+    
     
     // @Copypasta: From console.c ... 
     // Get resources.
@@ -268,8 +285,8 @@ void editor_init(State *state) {
     // Make arena and allocate space for the buffers.
     arena = arena_make(EDITOR_ARENA_SIZE);
 
-    info_buffer.data   = arena_alloc(&arena, 256);
-    info_buffer.length = 256;
+    info_buffer.data   = arena_alloc(&arena, 512);
+    info_buffer.length = 512;
 }
 
 
@@ -331,6 +348,9 @@ void editor_clear_selection() {
             case EDITOR_EDGE:
                 edges_list[editor_selected_list[i].edge_index].flags &= ~EDITOR_EDGE_SELECTED;
                 break;
+            case EDITOR_ENTITY:
+                entity_list[editor_selected_list[i].entity_index].flags &= ~EDITOR_ENTITY_SELECTED;
+                break;
         }
     }
     array_list_clear(&editor_selected_list);
@@ -387,7 +407,7 @@ void editor_select_handle_mouse_left_click() {
         world_mouse_snapped_left_click_origin = world_mouse_snapped_position;
 
         // Reset vertex that acts as move acnhor.
-        selection_move_anchor_vertex_index = EDITOR_INVALID_INDEX;
+        selection_move_anchor_vector = world_mouse_snapped_position;
 
         if (!hold(SDLK_LSHIFT)) {
             editor_clear_selection();
@@ -396,10 +416,9 @@ void editor_select_handle_mouse_left_click() {
         // Selecting closest vertex or edge if any.
         u32 closest_selected_edge_index = EDITOR_INVALID_INDEX;
         for (u32 i = 0; i < array_list_length(&edges_list); i++) {
-
             // If found a vertex which user clicked, process it and return.
             if (vec2f_distance(edges_list[i].vertex, world_mouse_position) < editor_params.selection_radius) {
-                selection_move_anchor_vertex_index = i;
+                selection_move_anchor_vector = edges_list[i].vertex;
                 if (!(edges_list[i].flags & EDITOR_EDGE_VERTEX_SELECTED)) {
                     if (hold(SDLK_LALT)) {
                         editor_chain_select(i);
@@ -436,69 +455,24 @@ void editor_select_handle_mouse_left_click() {
                         .type = EDITOR_EDGE,
                         .edge_index = closest_selected_edge_index,
                         }));
-
-            // if (!(edges_list[closest_selected_edge_index].flags & EDITOR_EDGE_VERTEX_SELECTED)) {
-            //     edges_list[closest_selected_edge_index].flags |= EDITOR_EDGE_VERTEX_SELECTED;
-            //     array_list_append(&editor_selected_list, ((Editor_Selected) {
-            //                 .type = EDITOR_VERTEX,
-            //                 .edge_index = closest_selected_edge_index,
-            //                 }));
-            // }
-
-            // if (!(edges_list[edges_list[closest_selected_edge_index].next_index].flags & EDITOR_EDGE_VERTEX_SELECTED)) {
-            //     edges_list[edges_list[closest_selected_edge_index].next_index].flags |= EDITOR_EDGE_VERTEX_SELECTED;
-            //     array_list_append(&editor_selected_list, ((Editor_Selected) {
-            //                 .type = EDITOR_VERTEX,
-            //                 .edge_index = edges_list[closest_selected_edge_index].next_index,
-            //                 }));
-            // }
+            return;
         }
 
-
-        // @Deprecated.
-        // for (u32 i = 0; i < array_list_length(&quads_list); i++) {
-        //     // Selecting closes vertex if any.
-        //     for (u32 j = 0; j < VERTICIES_PER_QUAD; j++) {
-        //         if (vec2f_distance(quads_list[i].quad.verts[j], world_mouse_position) < editor_params.selection_radius) {
-        //             // If a quad with vertex that user selected is not selected, it gets selected. Yeah goodluck reading this comment in the future.
-        //             if (!(quads_list[i].flags & EDITOR_QUAD_BITMASK_ANY_POINT_SELECTED)) {
-        //                 array_list_append(&editor_selected_list, ((Editor_Selected) {
-        //                             .type = EDITOR_QUAD,
-        //                             .quad = &quads_list[i],
-        //                             }));
-        //             }
-
-        //         
-        //             // Selected vertex flags are in the order p0 -> p2 -> p3 -> p1
-        //             // Same order as verticies in quad.
-        //             // So this will select needed vertex.
-        //             quads_list[i].flags |= 1 << j;
-        //             
-
-        //             goto editor_left_mouse_select_end;
-        //         }
-        //     }
-        // }
-
-        // @Deprecated.
-        // @Temporary: In the future loop over the verticies that are inside camera view boundaries.
-        // for (u32 i = 0; i < array_list_length(&quads_list); i++) {
-        //     // Selecting quad if it's center is touched.
-        //     if (vec2f_distance(quad_center(&quads_list[i].quad), world_mouse_position) < editor_params.selection_radius) {
-        //         // @Redundant?
-        //         // Quad is selected, add it only if it is not already selected.
-        //         if (!(quads_list[i].flags & EDITOR_QUAD_BITMASK_ANY_POINT_SELECTED)) {
-        //             quads_list[i].flags |= EDITOR_QUAD_BITMASK_ANY_POINT_SELECTED;
-        //             array_list_append(&editor_selected_list, ((Editor_Selected) {
-        //                         .type = EDITOR_QUAD,
-        //                         .quad = &quads_list[i],
-        //                         }));
-        //         }
-
-        //         goto editor_left_mouse_select_end;
-        //         break;
-        //     }
-        // }
+        // Selecting entities if nothing was selecting.
+        AABB entity_aabb;
+        for (u32 i = 0; i < array_list_length(&entity_list); i++) {
+            entity_aabb = obb_enclose_in_aabb(&entity_list[i].bound_box);
+            
+            if (aabb_touches_point(&entity_aabb, world_mouse_position) && !(entity_list[i].flags & EDITOR_ENTITY_SELECTED)) {
+                selection_move_anchor_vector = entity_list[i].bound_box.center;
+                entity_list[i].flags |= EDITOR_ENTITY_SELECTED;
+                array_list_append(&editor_selected_list, ((Editor_Selected) {
+                            .type = EDITOR_ENTITY,
+                            .entity_index = i,
+                            }));
+                return;
+            }
+        }
 }
 
 
@@ -530,8 +504,8 @@ void editor_update_mouse() {
             }
 
             // Handle holds.
-            if (mouse_input_ptr->left_hold && selection_move_anchor_vertex_index != EDITOR_INVALID_INDEX) {
-                selection_move_offset = vec2f_difference(world_mouse_snapped_position, edges_list[selection_move_anchor_vertex_index].vertex);
+            if (mouse_input_ptr->left_hold) {
+                selection_move_offset = vec2f_difference(world_mouse_snapped_position, selection_move_anchor_vector);
             }
 
             // Handle unpresses.
@@ -539,18 +513,13 @@ void editor_update_mouse() {
                 // For all selected elements.
                 for (u32 i = 0; i < array_list_length(&editor_selected_list); i++) {
                     switch(editor_selected_list[i].type) {
-                        // @Deprecated.
-                        // case EDITOR_QUAD:
-                        //     for (u32 j = 0; j < VERTICIES_PER_QUAD; j++) {
-                        //         if (editor_selected_list[i].quad->flags & (1 << j)) {
-                        //             editor_selected_list[i].quad->quad.verts[j].x += selection_move_offset.x;
-                        //             editor_selected_list[i].quad->quad.verts[j].y += selection_move_offset.y;
-                        //         }
-                        //     }
-                        //     break;
                         case EDITOR_VERTEX:
                             edges_list[editor_selected_list[i].edge_index].vertex.x += selection_move_offset.x;
                             edges_list[editor_selected_list[i].edge_index].vertex.y += selection_move_offset.y;
+                            break;
+                        case EDITOR_ENTITY:
+                            entity_list[editor_selected_list[i].entity_index].bound_box.center.x += selection_move_offset.x;
+                            entity_list[editor_selected_list[i].entity_index].bound_box.center.y += selection_move_offset.y;
                             break;
                     }
                 }
@@ -582,24 +551,6 @@ void editor_update_mouse() {
                         }
                     }
 
-                    // @Deprecated.
-                    // for (u32 i = 0; i < array_list_length(&quads_list); i++) {
-                    //     for (u32 j = 0; j < VERTICIES_PER_QUAD; j++) {
-                    //         if (aabb_touches_point(&selection_region, quads_list[i].quad.verts[j])) {
-                    //             // Selected vertex flags are in the order p0 -> p2 -> p3 -> p1
-                    //             // Same order as verticies in quad.
-                    //             // So this will select needed vertex.
-                    //             quads_list[i].flags |= 1 << j;
-                    //         }
-                    //     }
-
-                    //     if (quads_list[i].flags & EDITOR_QUAD_BITMASK_ANY_POINT_SELECTED) {
-                    //         array_list_append(&editor_selected_list, ((Editor_Selected) {
-                    //                     .type = EDITOR_QUAD,
-                    //                     .quad = &quads_list[i],
-                    //                     }));
-                    //     }
-                    // }
                 }
 
                 // Resetting move offset.
@@ -624,6 +575,12 @@ void editor_update_mouse() {
                     switch(editor_selected_list[i].type) {
                         case EDITOR_EDGE:
                             edges_list[editor_selected_list[i].edge_index].flags &= ~EDITOR_EDGE_SELECTED;
+                            array_list_unordered_remove(&editor_selected_list, i);
+                            i--;
+                            break;
+                        case EDITOR_ENTITY:
+                            entity_list[editor_selected_list[i].entity_index].flags &= ~EDITOR_ENTITY_SELECTED;
+                            entity_list[editor_selected_list[i].entity_index].flags |= EDITOR_ENTITY_REMOVED;
                             array_list_unordered_remove(&editor_selected_list, i);
                             i--;
                             break;
@@ -692,6 +649,17 @@ void editor_update_mouse() {
                     }
                 }
                 array_list_clear(&edges_deleted_indicies_list);
+
+                
+                // Safely remove entities that were marked as removed.
+                for (u32 j = 0; j < array_list_length(&entity_list); j++) {
+                    if (entity_list[j].flags & EDITOR_ENTITY_REMOVED) {
+                        array_list_unordered_remove(&entity_list, j);
+                        j--;
+                    }
+                }
+
+
             }
 
             if (pressed(SDLK_c)) {
@@ -712,10 +680,30 @@ void editor_update_mouse() {
                     }
                 }
 
-                selection_move_anchor_vertex_index = EDITOR_INVALID_INDEX;
+                // @Redundant?
+                // selection_move_anchor_vector = world_mouse_left_click_origin;
 
                 if (array_list_length(&editor_selected_list) > 0) {
                     editor_state = EDITOR_STATE_CUT;
+                }
+            }
+
+            if (pressed(SDLK_r)) {
+                // Removing everything except entities.
+                for (u32 i = 0; i < array_list_length(&editor_selected_list); i++) {
+                    switch(editor_selected_list[i].type) {
+                        case EDITOR_ENTITY:
+                            break;
+                        default:
+                            array_list_unordered_remove(&editor_selected_list, i);
+                            i--;
+                            break;
+                    }
+                }
+
+                if (array_list_length(&editor_selected_list) > 0) {
+                    rotate_origin_vector = world_mouse_position;
+                    editor_state = EDITOR_STATE_ROTATE;
                 }
             }
 
@@ -785,7 +773,50 @@ void editor_update_mouse() {
 
 
             break;
+        case EDITOR_STATE_ROTATE:
+            // For right now, simple rotationg is implemented around the individual entities centers and without geometry rotation.
+
+            rotate_anchor = VEC2F_ORIGIN;
+            for (u32 i = 0; i < array_list_length(&editor_selected_list); i++) {
+                rotate_anchor = vec2f_sum(rotate_anchor, entity_list[editor_selected_list[i].entity_index].bound_box.center);
+            }
+            rotate_anchor = vec2f_divide_constant(rotate_anchor, array_list_length(&editor_selected_list));
+
+            Vec2f relative_rotate_mouse_position = vec2f_normalize(vec2f_difference(world_mouse_position, rotate_anchor));
+            Vec2f relative_rotate_origin_vector = vec2f_normalize(vec2f_difference(rotate_origin_vector, rotate_anchor));
+
+            rotate_rad_offset = atan2f(vec2f_cross(relative_rotate_origin_vector, relative_rotate_mouse_position), vec2f_dot(relative_rotate_origin_vector, relative_rotate_mouse_position));
+            
+            rotate_rad_offset = (int)(rotate_rad_offset / (PI / 8)) * (PI / 8);
+
+
+            // Handle clicks.
+            if (mouse_input_ptr->left_pressed) {
+                // Saving information of where user clicked.
+                world_mouse_left_click_origin = world_mouse_position;
+                world_mouse_snapped_left_click_origin = world_mouse_snapped_position;
+                
+
+                
+                for (u32 i = 0; i < array_list_length(&editor_selected_list); i++) {
+                    entity_list[editor_selected_list[i].entity_index].bound_box.rot += rotate_rad_offset;
+                }
+
+                rotate_origin_vector = world_mouse_position;
+
+            }
+
+            if (pressed(SDLK_ESCAPE)) {
+                // Saving information of where user clicked.
+                world_mouse_right_click_origin = world_mouse_position;
+                world_mouse_snapped_right_click_origin = world_mouse_snapped_position;
+                
+                editor_state = EDITOR_STATE_SELECT;
+            }
+
+            break;
     }
+
 
 }
 
@@ -845,20 +876,27 @@ void editor_draw() {
 
     draw_begin(quad_drawer_ptr);
 
-    // @Deprecated.
-    // Draw editor quads.   
-    // for (u32 i = 0; i < array_list_length(&quads_list); i++) {
-    //     draw_quad(quads_list[i].quad.verts[0], quads_list[i].quad.verts[1], quads_list[i].quad.verts[2], quads_list[i].quad.verts[3], .color = quads_list[i].color);
 
-    //     for (u32 j = 0; j < VERTICIES_PER_QUAD; j++) {
-    //         if (quads_list[i].flags & (1 << j)) {
-    //             draw_dot(quads_list[i].quad.verts[j], VEC4F_RED, &editor_camera, NULL);
-    //         } else {
-    //             draw_dot(quads_list[i].quad.verts[j], VEC4F_CYAN, &editor_camera, NULL);
-    //         }
-    //     }
-    // }
-    
+    // Draw entities.
+    for (u32 i = 0; i < array_list_length(&entity_list); i++) {
+        switch(entity_list[i].type) {
+            case PLAYER:
+                draw_rect(obb_p0(&entity_list[i].bound_box), obb_p1(&entity_list[i].bound_box), .color = LEVEL_COLOR_PLAYER);
+                break;
+            case PROP_PHYSICS:
+                draw_rect(obb_p0(&entity_list[i].bound_box), obb_p1(&entity_list[i].bound_box), .color = LEVEL_COLOR_PROP_PHYSICS, .offset_angle = entity_list[i].bound_box.rot);
+                break;
+            case RAY_EMITTER:
+                draw_rect(obb_p0(&entity_list[i].bound_box), obb_p1(&entity_list[i].bound_box), .color = LEVEL_COLOR_RAY_EMITTER, .offset_angle = entity_list[i].bound_box.rot);
+                break;
+            case MIRROR:
+                draw_rect(obb_p0(&entity_list[i].bound_box), obb_p1(&entity_list[i].bound_box), .color = LEVEL_COLOR_MIRROR, .offset_angle = entity_list[i].bound_box.rot);
+                break;
+            case GLASS:
+                draw_rect(obb_p0(&entity_list[i].bound_box), obb_p1(&entity_list[i].bound_box), .color = LEVEL_COLOR_GLASS, .offset_angle = entity_list[i].bound_box.rot);
+                break;
+        }
+    }
 
 
     // Draw verticies.
@@ -877,6 +915,7 @@ void editor_draw() {
             draw_dot(cut_position, VEC4F_RED, &editor_camera, NULL);
         }
     }
+
     
 
 
@@ -895,6 +934,48 @@ void editor_draw() {
     shader_update_projection(line_drawer_ptr->program, &projection);
 
     line_draw_begin(line_drawer_ptr);
+
+
+
+
+    // Draw entities aabb outlines.
+    AABB entity_aabb;
+    for (u32 i = 0; i < array_list_length(&entity_list); i++) {
+        switch(entity_list[i].type) {
+            case RAY_EMITTER:
+                Vec2f midpoint = vec2f_midpoint(obb_p2(&entity_list[i].bound_box), obb_p1(&entity_list[i].bound_box));
+                draw_line(midpoint, vec2f_sum(midpoint, vec2f_multi_constant(obb_right(&entity_list[i].bound_box), 4.0f)), VEC4F_RED, NULL);
+                break;
+        }
+
+        entity_aabb = obb_enclose_in_aabb(&entity_list[i].bound_box);
+
+        
+        if (entity_list[i].flags & EDITOR_ENTITY_SELECTED) {
+            
+
+            if (editor_state == EDITOR_STATE_ROTATE) {
+                draw_rect_outline(obb_p0(&entity_list[i].bound_box), obb_p1(&entity_list[i].bound_box), VEC4F_RED, entity_list[i].bound_box.rot, NULL);
+                entity_list[i].bound_box.rot += rotate_rad_offset;
+                draw_rect_outline(obb_p0(&entity_list[i].bound_box), obb_p1(&entity_list[i].bound_box), VEC4F_YELLOW, entity_list[i].bound_box.rot, NULL);
+                draw_cross(entity_list[i].bound_box.center, VEC4F_YELLOW, &editor_camera, NULL);
+                entity_list[i].bound_box.rot -= rotate_rad_offset;
+            } else {
+                draw_rect_outline(entity_aabb.p0, entity_aabb.p1, VEC4F_RED, 0.0f, NULL);
+                draw_cross(entity_list[i].bound_box.center, VEC4F_RED, &editor_camera, NULL);
+
+                draw_rect_outline(vec2f_sum(entity_aabb.p0, selection_move_offset), vec2f_sum(entity_aabb.p1, selection_move_offset), VEC4F_YELLOW, 0.0f, NULL);
+                draw_cross(vec2f_sum(entity_list[i].bound_box.center, selection_move_offset), VEC4F_YELLOW, &editor_camera, NULL);
+            }
+        } else {
+            draw_rect_outline(entity_aabb.p0, entity_aabb.p1, VEC4F_WHITE, 0.0f, NULL);
+            draw_cross(entity_list[i].bound_box.center, VEC4F_WHITE, &editor_camera, NULL);
+        }
+    }
+
+
+
+
 
 
     // Draw editor edges.
@@ -933,32 +1014,11 @@ void editor_draw() {
         }
     }
 
-    // @Deprecated
-    // // Draw editor quads outlines.
-    // for (u32 i = 0; i < array_list_length(&quads_list); i++) {
-    //     if (quads_list[i].flags & EDITOR_QUAD_BITMASK_ANY_POINT_SELECTED) {
-    //         // Original selected.
-    //         draw_cross(quad_center(&quads_list[i].quad), VEC4F_YELLOW, &editor_camera, NULL);
-    //         draw_quad_outline(quads_list[i].quad.verts[0], quads_list[i].quad.verts[1], quads_list[i].quad.verts[2], quads_list[i].quad.verts[3], VEC4F_YELLOW, NULL);
+    if (editor_state == EDITOR_STATE_ROTATE) {
+        draw_line(rotate_anchor, world_mouse_position, VEC4F_PINK, NULL);
+        draw_line(rotate_anchor, rotate_origin_vector, VEC4F_PINK, NULL);
+    }
 
-
-    //         // Preview of where selected quad.
-    //         Quad preview_quad;
-    //         for (u32 j = 0; j < VERTICIES_PER_QUAD; j++) {
-    //             if (quads_list[i].flags & (1 << j)) {
-    //                 preview_quad.verts[j] = vec2f_sum(quads_list[i].quad.verts[j], selection_move_offset);
-    //             } else {
-    //                 preview_quad.verts[j] = quads_list[i].quad.verts[j];
-    //             }
-    //         }
-    //         draw_cross(quad_center(&preview_quad), VEC4F_RED, &editor_camera, NULL);
-    //         draw_quad_outline(preview_quad.verts[0], preview_quad.verts[1], preview_quad.verts[2], preview_quad.verts[3], VEC4F_RED, NULL);
-
-    //     } else {
-    //         draw_quad_outline(quads_list[i].quad.verts[0], quads_list[i].quad.verts[1], quads_list[i].quad.verts[2], quads_list[i].quad.verts[3], VEC4F_WHITE, NULL);
-    //         draw_cross(quad_center(&quads_list[i].quad), VEC4F_WHITE, &editor_camera, NULL);
-    //     }
-    // }
 
     line_draw_end();
 
@@ -998,8 +1058,23 @@ void editor_draw() {
     // Menu processing.
     if (editor_ui_mouse_menu_toggle) {
         UI_WINDOW(editor_ui_mouse_menu_origin.x, editor_ui_mouse_menu_origin.y, editor_params.ui_mouse_menu_width, editor_params.ui_mouse_menu_element_height * editor_params.ui_mouse_menu_element_count,
-            if (UI_BUTTON(vec2f_make(editor_params.ui_mouse_menu_width, editor_params.ui_mouse_menu_element_height), CSTR("Add quad"))) {
-                editor_add_quad_at(world_mouse_snapped_right_click_origin);
+            if (UI_BUTTON(vec2f_make(editor_params.ui_mouse_menu_width, editor_params.ui_mouse_menu_element_height), CSTR("Quad"))) {
+                editor_add_quad(world_mouse_snapped_right_click_origin);
+            }
+            if (UI_BUTTON(vec2f_make(editor_params.ui_mouse_menu_width, editor_params.ui_mouse_menu_element_height), CSTR("Player"))) {
+                editor_add_entity(world_mouse_snapped_right_click_origin, PLAYER);
+            }
+            if (UI_BUTTON(vec2f_make(editor_params.ui_mouse_menu_width, editor_params.ui_mouse_menu_element_height), CSTR("Prop Physics"))) {
+                editor_add_entity(world_mouse_snapped_right_click_origin, PROP_PHYSICS);
+            }
+            if (UI_BUTTON(vec2f_make(editor_params.ui_mouse_menu_width, editor_params.ui_mouse_menu_element_height), CSTR("Ray Emitter"))) {
+                editor_add_entity(world_mouse_snapped_right_click_origin, RAY_EMITTER);
+            }
+            if (UI_BUTTON(vec2f_make(editor_params.ui_mouse_menu_width, editor_params.ui_mouse_menu_element_height), CSTR("Mirror"))) {
+                editor_add_entity(world_mouse_snapped_right_click_origin, MIRROR);
+            }
+            if (UI_BUTTON(vec2f_make(editor_params.ui_mouse_menu_width, editor_params.ui_mouse_menu_element_height), CSTR("Glass"))) {
+                editor_add_entity(world_mouse_snapped_right_click_origin, GLASS);
             }
         );
     }
@@ -1039,6 +1114,18 @@ void editor_write(String name) {
         written += fwrite_u32(edges_list[i].previous_index, file) * 4;
         written += fwrite_u32(edges_list[i].next_index, file) * 4;
         written += fwrite(&edges_list[i].flipped_normal, 1, 1, file);
+    }
+    
+    // Serializing each entity information.
+    written += fwrite_u32(array_list_length(&entity_list), file) * 4;
+    
+    for (u32 i = 0; i < array_list_length(&entity_list); i++) {
+        written += fwrite(&entity_list[i].type, 1, 1, file);
+        written += fwrite_float(entity_list[i].bound_box.center.x, file) * 4;
+        written += fwrite_float(entity_list[i].bound_box.center.y, file) * 4;
+        written += fwrite_float(entity_list[i].bound_box.dimensions.x, file) * 4;
+        written += fwrite_float(entity_list[i].bound_box.dimensions.y, file) * 4;
+        written += fwrite_float(entity_list[i].bound_box.rot, file) * 4;
     }
 
     fclose(file);
@@ -1098,6 +1185,19 @@ void editor_read(String name) {
         edges_list[i].previous_index = read_u32(&ptr);
         edges_list[i].next_index = read_u32(&ptr);
         edges_list[i].flipped_normal = read_byte(&ptr);
+    }
+
+    u32 entity_count = read_u32(&ptr);
+
+    array_list_clear(&entity_list);
+    for (u32 i = 0; i < entity_count; i++) {
+        array_list_append(&entity_list, ((Editor_Entity) {0}));
+        entity_list[i].type = read_byte(&ptr);
+        entity_list[i].bound_box.center.x = read_float(&ptr);
+        entity_list[i].bound_box.center.y = read_float(&ptr);
+        entity_list[i].bound_box.dimensions.x = read_float(&ptr);
+        entity_list[i].bound_box.dimensions.y = read_float(&ptr);
+        entity_list[i].bound_box.rot = read_float(&ptr);
     }
 
 
@@ -1185,6 +1285,19 @@ void editor_build(String name) {
         }
     }
 
+    // Buildin each entity information.
+    written += fwrite_u32(array_list_length(&entity_list), file) * 4;
+    
+    for (u32 i = 0; i < array_list_length(&entity_list); i++) {
+        written += fwrite(&entity_list[i].type, 1, 1, file);
+        written += fwrite_float(entity_list[i].bound_box.center.x, file) * 4;
+        written += fwrite_float(entity_list[i].bound_box.center.y, file) * 4;
+        written += fwrite_float(entity_list[i].bound_box.dimensions.x, file) * 4;
+        written += fwrite_float(entity_list[i].bound_box.dimensions.y, file) * 4;
+        written += fwrite_float(entity_list[i].bound_box.rot, file) * 4;
+    }
+
+
     fclose(file);
 
 
@@ -1197,38 +1310,7 @@ void editor_build(String name) {
 
 
 
-void editor_add_quad() {
-    u32 index = array_list_length(&edges_list);
-
-    array_list_append(&edges_list, ((Editor_Edge) {
-                .vertex = ((Vec2f) { -1.0f, -1.0f }),
-                .previous_index = index + 3,
-                .next_index     = index + 1,
-                .flipped_normal = false,
-                }));
-    array_list_append(&edges_list, ((Editor_Edge) {
-                .vertex = ((Vec2f) { 1.0f, -1.0f }),
-                .previous_index = index,
-                .next_index     = index + 2,
-                .flipped_normal = false,
-                }));
-    array_list_append(&edges_list, ((Editor_Edge) {
-                .vertex = ((Vec2f) { 1.0f, 1.0f }),
-                .previous_index = index + 1,
-                .next_index     = index + 3,
-                .flipped_normal = false,
-                }));
-    array_list_append(&edges_list, ((Editor_Edge) {
-                .vertex = ((Vec2f) { -1.0f, 1.0f }),
-                .previous_index = index + 2,
-                .next_index     = index,
-                .flipped_normal = false,
-                }));
-
-}
-
-
-void editor_add_quad_at(Vec2f position) {
+void editor_add_quad(Vec2f position) {
     u32 index = array_list_length(&edges_list);
 
     array_list_append(&edges_list, ((Editor_Edge) {
@@ -1255,4 +1337,39 @@ void editor_add_quad_at(Vec2f position) {
                 .next_index     = index,
                 .flipped_normal = false,
                 }));
+}
+
+void editor_add_entity(Vec2f position, Entity_Type type) {
+    switch (type) {
+        case PLAYER:
+            array_list_append(&entity_list, ((Editor_Entity) {
+                        .type = PLAYER,
+                        .bound_box = obb_make(position, 0.8f, 1.4f, 0.0f),
+                        }));
+            break;
+        case PROP_PHYSICS:
+            array_list_append(&entity_list, ((Editor_Entity) {
+                        .type = PROP_PHYSICS,
+                        .bound_box = obb_make(position, 1.0f, 1.0f, 0.0f),
+                        }));
+            break;
+        case RAY_EMITTER:
+            array_list_append(&entity_list, ((Editor_Entity) {
+                        .type = RAY_EMITTER,
+                        .bound_box = obb_make(position, 1.0f, 1.0f, 0.0f),
+                        }));
+            break;
+        case MIRROR:
+            array_list_append(&entity_list, ((Editor_Entity) {
+                        .type = MIRROR,
+                        .bound_box = obb_make(position, 0.4f, 3.0f, 0.0f),
+                        }));
+            break;
+        case GLASS:
+            array_list_append(&entity_list, ((Editor_Entity) {
+                        .type = GLASS,
+                        .bound_box = obb_make(position, 1.0f, 4.0f, 0.0f),
+                        }));
+            break;
+    }
 }
