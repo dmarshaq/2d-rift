@@ -889,6 +889,9 @@ void editor_draw() {
             case RAY_EMITTER:
                 draw_rect(obb_p0(&entity_list[i].bound_box), obb_p1(&entity_list[i].bound_box), .color = LEVEL_COLOR_RAY_EMITTER, .offset_angle = entity_list[i].bound_box.rot);
                 break;
+            case RAY_HARVESTER:
+                draw_rect(obb_p0(&entity_list[i].bound_box), obb_p1(&entity_list[i].bound_box), .color = LEVEL_COLOR_RAY_EMITTER, .offset_angle = entity_list[i].bound_box.rot);
+                break;
             case MIRROR:
                 draw_rect(obb_p0(&entity_list[i].bound_box), obb_p1(&entity_list[i].bound_box), .color = LEVEL_COLOR_MIRROR, .offset_angle = entity_list[i].bound_box.rot);
                 break;
@@ -940,11 +943,16 @@ void editor_draw() {
 
     // Draw entities aabb outlines.
     AABB entity_aabb;
+    Vec2f midpoint;
     for (u32 i = 0; i < array_list_length(&entity_list); i++) {
         switch(entity_list[i].type) {
             case RAY_EMITTER:
-                Vec2f midpoint = vec2f_midpoint(obb_p2(&entity_list[i].bound_box), obb_p1(&entity_list[i].bound_box));
+                midpoint = vec2f_midpoint(obb_p2(&entity_list[i].bound_box), obb_p1(&entity_list[i].bound_box));
                 draw_line(midpoint, vec2f_sum(midpoint, vec2f_multi_constant(obb_right(&entity_list[i].bound_box), 4.0f)), VEC4F_RED, NULL);
+                break;
+            case RAY_HARVESTER:
+                midpoint = vec2f_midpoint(obb_p2(&entity_list[i].bound_box), obb_p1(&entity_list[i].bound_box));
+                draw_line(midpoint, vec2f_sum(midpoint, vec2f_multi_constant(obb_right(&entity_list[i].bound_box), 4.0f)), VEC4F_GREEN, NULL);
                 break;
         }
 
@@ -999,7 +1007,7 @@ void editor_draw() {
         // -2 * edges_list[i].flipped_normal + 1 ----> true maps to -1, false maps to 1.
         Vec2f normal = vec2f_normalize(vec2f_make( (-2 * edges_list[i].flipped_normal + 1) * (v1.y - v0.y), (2 * edges_list[i].flipped_normal - 1) * (v1.x - v0.x) ));
 
-        Vec2f midpoint = vec2f_make(v0.x + (v1.x - v0.x) / 2, v0.y + (v1.y - v0.y) / 2);
+        midpoint = vec2f_make(v0.x + (v1.x - v0.x) / 2, v0.y + (v1.y - v0.y) / 2);
         if (edges_list[i].flipped_normal) {
             draw_line(midpoint, vec2f_sum(midpoint, vec2f_multi_constant(normal, normal_length)), VEC4F_RED, NULL);
         } else {
@@ -1069,6 +1077,9 @@ void editor_draw() {
             }
             if (UI_BUTTON(vec2f_make(editor_params.ui_mouse_menu_width, editor_params.ui_mouse_menu_element_height), CSTR("Ray Emitter"))) {
                 editor_add_entity(world_mouse_snapped_right_click_origin, RAY_EMITTER);
+            }
+            if (UI_BUTTON(vec2f_make(editor_params.ui_mouse_menu_width, editor_params.ui_mouse_menu_element_height), CSTR("Ray Harvester"))) {
+                editor_add_entity(world_mouse_snapped_right_click_origin, RAY_HARVESTER);
             }
             if (UI_BUTTON(vec2f_make(editor_params.ui_mouse_menu_width, editor_params.ui_mouse_menu_element_height), CSTR("Mirror"))) {
                 editor_add_entity(world_mouse_snapped_right_click_origin, MIRROR);
@@ -1356,6 +1367,12 @@ void editor_add_entity(Vec2f position, Entity_Type type) {
         case RAY_EMITTER:
             array_list_append(&entity_list, ((Editor_Entity) {
                         .type = RAY_EMITTER,
+                        .bound_box = obb_make(position, 1.0f, 1.0f, 0.0f),
+                        }));
+            break;
+        case RAY_HARVESTER:
+            array_list_append(&entity_list, ((Editor_Entity) {
+                        .type = RAY_HARVESTER,
                         .bound_box = obb_make(position, 1.0f, 1.0f, 0.0f),
                         }));
             break;

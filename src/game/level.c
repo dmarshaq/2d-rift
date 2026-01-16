@@ -214,6 +214,11 @@ void level_load(String name) {
 
                 level_add_entity(e);
                 break;
+            case RAY_HARVESTER:
+                e.phys_box = phys_box_make(obb.center, obb.dimensions.x, obb.dimensions.y, obb.rot, 0.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, false, false, false, false);
+
+                level_add_entity(e);
+                break;
             case MIRROR:
                 e.phys_box = phys_box_make(obb.center, obb.dimensions.x, obb.dimensions.y, obb.rot, 0.0f, 0.0f, LEVEL_GEOMETRY_STATIC_FRICTION, LEVEL_GEOMETRY_DYNAMIC_FRICTION, false, false, false, false);
 
@@ -344,8 +349,12 @@ void level_update() {
     if (rotation < -PI)
         rotation = 0.0f;
 
+    bool harvester_already_hit = false;
     for (s64 i = 0; i < state->level.entities_count; i++) {
         switch(state->level.entities[i].type) {
+            case RAY_HARVESTER:
+                state->level.entities[i].ray_harvester.ray_hit = harvester_already_hit;
+                break;
             case RAY_EMITTER:
                 // state->level.entities[i].phys_box.bound_box.rot = - PI / 12;
 
@@ -381,11 +390,26 @@ void level_update() {
                                     hit_entity = state->level.entities + j;
                                 }
                                 break;
+                            case RAY_HARVESTER:
+                                if (phys_ray_cast_obb(e->ray_points_list[array_list_length(&e->ray_points_list) - 1], direction, &state->level.entities[j].phys_box.bound_box, &hit, &distance, &normal)) {
+                                    hit_entity = state->level.entities + j;
+                                }
+                                break;
                             default:
                                 break;
                         }
                     }
 
+
+
+                    if (hit_entity->type == RAY_HARVESTER) {
+                        Vec2f face_dir = obb_right(&hit_entity->phys_box.bound_box);
+                        if (fequal(normal.x, face_dir.x) && fequal(normal.y, face_dir.y)) {
+                            hit_entity->ray_harvester.ray_hit = true;
+                            harvester_already_hit = true;
+                        }
+                        break;
+                    }
 
                     if (hit_entity == NULL) {
                         hit = vec2f_sum(e->ray_points_list[array_list_length(&e->ray_points_list) - 1], vec2f_multi_constant(direction, LEVEL_RAY_EMITTER_CUT_OFF_DISTANCE));
@@ -401,7 +425,6 @@ void level_update() {
                         // Reset since now we cast again but from different point.
                         continue;
                     }
-
                     break;
                 }
 
@@ -439,6 +462,13 @@ void level_draw() {
                 break;
             case RAY_EMITTER:
                 draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = LEVEL_COLOR_RAY_EMITTER, .offset_angle = state->level.entities[i].phys_box.bound_box.rot);
+                break;
+            case RAY_HARVESTER:
+                if (state->level.entities[i].ray_harvester.ray_hit) {
+                    draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = VEC4F_GREEN, .offset_angle = state->level.entities[i].phys_box.bound_box.rot);
+                } else {
+                    draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = VEC4F_RED, .offset_angle = state->level.entities[i].phys_box.bound_box.rot);
+                }
                 break;
             case MIRROR:
                 draw_rect(obb_p0(&state->level.entities[i].phys_box.bound_box), obb_p1(&state->level.entities[i].phys_box.bound_box), .color = LEVEL_COLOR_MIRROR, .offset_angle = state->level.entities[i].phys_box.bound_box.rot);

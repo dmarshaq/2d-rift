@@ -50,20 +50,12 @@ typedef struct ray_emitter {
 } Ray_Emitter;
 
 typedef struct ray_harvester {
-    
+    bool ray_hit;
 } Ray_Harvester;
 
 typedef struct mirror {
     
 } Mirror;
-
-typedef struct movable {
-    Entity *entity;
-} Movable;
-
-typedef struct rotatable {
-    Entity *entity;
-} Rotatable;
 
 typedef struct glass {
 
@@ -79,8 +71,6 @@ typedef enum entity_type : u8 {
     RAY_EMITTER,
     RAY_HARVESTER,
     MIRROR,
-    MOVABLE,
-    ROTATABLE,
     GLASS,
 } Entity_Type;
 
@@ -99,8 +89,6 @@ struct entity {
         Ray_Emitter     ray_emitter;
         Ray_Harvester   ray_harvester;
         Mirror          mirror;
-        Movable         movable;
-        Rotatable       rotatable;
         Glass           glass;
     };
 };
