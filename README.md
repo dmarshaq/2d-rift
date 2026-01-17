@@ -1,27 +1,37 @@
-# Rift Game
+# :video_game: Rift Game
 
-A 2D structured game built in C, designed as both a standalone project and a foundation for a reusable game development codebase.
+**Is a 2D demo of a puzzle game fully built in C with only dependencies being OpenGL, SDL2 and other smaller C libraries.**
 
-Table Of Contents
+![License](https://img.shields.io/badge/License-MIT-blue)
+![License](https://img.shields.io/badge/Platform-Windows-blue)
+![C](https://img.shields.io/badge/C-blue)
+![OpenGL](https://img.shields.io/badge/OpenGL-blue)
+![SDL2](https://img.shields.io/badge/SDL2-blue)
+
+
+:pushpin: Table Of Contents
 -----------------
-* [Quick Start](#quick-start)
-    * [Requirements](#requirements)
-    * [Build](#build)
-    * [How to Run](#how-to-run)
-* [Features](#features)
-* [About](#about)
-* [License](#license)
-* [Collaboration](#collaboration)
+* [Quick Start](#bulb-quick-start)
+    * [Requirements](#clipboard-requirements)
+    * [Build](#hammer-build)
+    * [How to Run](#tada-how-to-run)
+* [Features](#art-features)
+* [About](#dart-about)
+* [License](#page_facing_up-license)
+* [Collaboration](#seedling-collaboration)
 
-Quick Start
+:bulb: Quick Start
 -----------------
-#### Requirements
+
+Since game is built and can be launched on Windows only, to install and use needed libraries and GNU tools use MinGW environment. Which is a free, open-source software development environment that provides a port of the GNU Compiler Collection (GCC) and related tools on Windows.
+
+#### :clipboard: Requirements 
 * GCC or Clang (C compiler)
 * Git
 * SDL2 library
 * OpenGL development headers
 
-#### Build
+#### :hammer: Build 
 To build the project:
 
 1. Open a terminal and navigate to your project directory.
@@ -34,15 +44,15 @@ To build the project:
    gcc -o nob nob.c
    ./nob
    ```
-4. Run the executable:
+
+#### :tada: How to Run
+- After building, launch the game using the compiled executable through terminal from project directory.
+
    ```
-   ./bin/game
+   ./bin/game.exe
    ```
 
-#### How to Run
-- After building, launch the game using the compiled executable.
-
-Features
+:art: Features
 -----------------
 - Custom project build system using a meta-programming preprocessor and NoBuild tool.
 - Dynamic asset manager allowing real-time loading and modification of game resources.
@@ -50,11 +60,11 @@ Features
 - Low-level OpenGL graphics rendering for 2D interface and gameplay visuals.
 - Focus on learning, experimentation, and building a robust foundation for game development.
 
-About
+:dart: About
 -----------------
 This project is both a 2D game and a framework for creating future games in C. It explores low-level systems programming, graphics programming with OpenGL, and asset management. The goal is to provide a flexible, reusable codebase while delivering a functional game that showcases core engine capabilities.
 
-License
+:page_facing_up: License
 -----------------
 The MIT License (MIT)
 
@@ -78,7 +88,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-Collaboration
+:seedling: Collaboration
 -----------------
 Please open an issue in the repository for any questions or problems.
-Alternatively, you can contact me at tewindale@gmail.com.
+Alternatively, you can contact me at mrshovdaniil@gmail.com.
