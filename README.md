@@ -70,11 +70,14 @@ To build the project:
 - Focus on learning, experimentation, and building a robust foundation for game development.
 
 
+
+
 <p align="center">
-  <img alt="{307D7308-B992-4DE5-9FAE-51AC5A1DF03E}" src="https://github.com/user-attachments/assets/ad40689d-ed63-4375-afc4-758e2eb50f9d" width="700" />
+  <img src="https://github.com/user-attachments/assets/584147bd-2bc1-48da-8bb8-a49ad5d5ce39" width="600" />
   <br />
   <em>In game level editor</em>
 </p>
+
 
 :dart: About
 -----------------
