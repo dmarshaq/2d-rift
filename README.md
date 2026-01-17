@@ -9,6 +9,15 @@
 ![SDL2](https://img.shields.io/badge/SDL2-blue)
 
 
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/be8de21d-795a-4b88-a835-4099c45231d2" width="600" />
+  <br />
+  <em>In game level demo</em>
+</p>
+
+
+
 :pushpin: Table Of Contents
 -----------------
 * [Quick Start](#bulb-quick-start)
@@ -59,6 +68,13 @@ To build the project:
 - Modular C codebase designed for scalability and reuse in future game projects.
 - Low-level OpenGL graphics rendering for 2D interface and gameplay visuals.
 - Focus on learning, experimentation, and building a robust foundation for game development.
+
+
+<p align="center">
+  <img alt="{307D7308-B992-4DE5-9FAE-51AC5A1DF03E}" src="https://github.com/user-attachments/assets/ad40689d-ed63-4375-afc4-758e2eb50f9d" width="700" />
+  <br />
+  <em>In game level editor</em>
+</p>
 
 :dart: About
 -----------------
